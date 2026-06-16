@@ -366,6 +366,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       targets: this.goal,
       x: newGoalX,
       y: newGoalY,
+      delay: 700,  // wait for terrain slide to finish
       duration: 900,
       ease: 'Power2.Out',
     });
