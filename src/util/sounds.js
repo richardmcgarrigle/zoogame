@@ -63,16 +63,16 @@ export default class SoundManager {
     gain.connect(ctx.destination);
 
     osc.type = 'sine';
-    // Quick rise (impact), then slow fall (spring releasing) — that's the boing shape.
-    osc.frequency.setValueAtTime(130, t);
-    osc.frequency.exponentialRampToValueAtTime(520, t + 0.04);
-    osc.frequency.exponentialRampToValueAtTime(90, t + 0.38);
+    // Sharp rise on impact, quick fall — keeps it punchy like a rubber ball.
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(380, t + 0.025);
+    osc.frequency.exponentialRampToValueAtTime(140, t + 0.18);
 
     gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
 
     osc.start(t);
-    osc.stop(t + 0.4);
+    osc.stop(t + 0.2);
   }
 
   // Heavy wooden crate smash: bass thud + mid-frequency wood crack.
