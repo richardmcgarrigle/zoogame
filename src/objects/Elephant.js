@@ -75,6 +75,8 @@ export default class Elephant {
     this.groundContacts = 0;
     this.wasGrounded = true;
     this.flapTime = 0;
+    this.surfaceAngle = 0;
+    this.contactBodies = new Map();
 
     scene.matter.world.on('collisionstart', this.onCollisionStart, this);
     scene.matter.world.on('collisionend', this.onCollisionEnd, this);
@@ -98,6 +100,8 @@ export default class Elephant {
       const b = bodyB.label;
       if ((a === 'elephant' && this.isPlatformLabel(b)) || (b === 'elephant' && this.isPlatformLabel(a))) {
         this.groundContacts++;
+        const surfaceBody = a === 'elephant' ? bodyB : bodyA;
+        this.contactBodies.set(surfaceBody.id, surfaceBody);
       }
       if (a === 'elephant' && this.isKickableLabel(b)) {
         this.applyKickImpulse(bodyA, bodyB);
@@ -114,6 +118,8 @@ export default class Elephant {
       const b = bodyB.label;
       if ((a === 'elephant' && this.isPlatformLabel(b)) || (b === 'elephant' && this.isPlatformLabel(a))) {
         this.groundContacts = Math.max(0, this.groundContacts - 1);
+        const surfaceBody = a === 'elephant' ? bodyB : bodyA;
+        this.contactBodies.delete(surfaceBody.id);
       }
     }
   }
@@ -351,6 +357,19 @@ export default class Elephant {
     this.trunk.setPosition(trunkX, trunkY);
     this.trunk.setFlipX(facing < 0);
     this.trunk.setVisible(this.isSwinging);
+
+    // Tilt the sprite to match the slope of the surface being stood on.
+    const isGrounded = this.groundContacts > 0;
+    let targetAngle = 0;
+    if (isGrounded && this.contactBodies.size > 0) {
+      let sum = 0;
+      for (const b of this.contactBodies.values()) sum += b.angle;
+      targetAngle = sum / this.contactBodies.size;
+      // Clamp to ±35° so extreme collisions don't look absurd.
+      targetAngle = Phaser.Math.Clamp(targetAngle, -0.61, 0.61);
+    }
+    this.surfaceAngle += (targetAngle - this.surfaceAngle) * 0.18;
+    this.sprite.rotation = this.surfaceAngle;
   }
 
   checkTrunkHits(props) {

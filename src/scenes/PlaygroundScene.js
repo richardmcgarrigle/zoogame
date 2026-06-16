@@ -92,7 +92,33 @@ export default class PlaygroundScene extends Phaser.Scene {
   create() {
     generatePlaceholderTextures(this);
 
-    this.cameras.main.setBackgroundColor('#bfe3c8');
+    this.cameras.main.setBackgroundColor('#87ceeb');
+
+    // Sky gradient: deep blue at top fading to warm sunny yellow-white at horizon.
+    const skyGfx = this.add.graphics().setScrollFactor(0).setDepth(-1);
+    const skyStops = [
+      { y: 0,    color: 0x3a8fd4 },
+      { y: 0.45, color: 0x6dbde8 },
+      { y: 0.75, color: 0xaadcf5 },
+      { y: 1.0,  color: 0xfff0b8 },
+    ];
+    const skyH = WORLD_HEIGHT;
+    const skyW = 4096;
+    for (let i = 0; i < skyStops.length - 1; i++) {
+      const a = skyStops[i];
+      const b = skyStops[i + 1];
+      const y0 = Math.round(a.y * skyH);
+      const y1 = Math.round(b.y * skyH);
+      const steps = Math.max(1, y1 - y0);
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps;
+        const r = Math.round(((a.color >> 16 & 0xff) * (1 - t) + (b.color >> 16 & 0xff) * t));
+        const g = Math.round(((a.color >> 8  & 0xff) * (1 - t) + (b.color >> 8  & 0xff) * t));
+        const bl = Math.round(((a.color       & 0xff) * (1 - t) + (b.color       & 0xff) * t));
+        skyGfx.fillStyle((r << 16) | (g << 8) | bl, 1);
+        skyGfx.fillRect(0, y0 + s, skyW, 1);
+      }
+    }
 
     this.score = 0;
     this.worldWidth = BASE_WORLD_WIDTH();
