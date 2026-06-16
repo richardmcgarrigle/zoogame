@@ -13,6 +13,10 @@ const TRUNK_SWING_DURATION = 220;
 const TRUNK_HIT_RADIUS = 70;
 const TRUNK_SWING_COOLDOWN = 320;
 
+const BLAST_SPEED = 14;
+const BLAST_RADIUS = 38;
+const BLAST_LIFETIME = 600;  // ms
+
 const BODY_SCALE = 0.4;
 
 const KICK_MIN_SPEED = 0.5;
@@ -62,6 +66,9 @@ export default class Elephant {
     this.windGraphics = scene.add.graphics().setDepth(9);
     this.windStreaks = [];
     this.isDashing = false;
+
+    this.blastGraphics = scene.add.graphics().setDepth(13);
+    this.blasts = [];
 
     this._prevPadButtons = {};
     this.celebrateTimer = 0;
@@ -217,6 +224,11 @@ export default class Elephant {
         if (velocity.y > GLIDE_MAX_FALL) {
           this.sprite.setVelocityY(GLIDE_MAX_FALL);
         }
+        // Gently push forward if no directional input, so glide carries you
+        if (!left && !right) {
+          const driftTarget = this.facing * MOVE_SPEED_AIR * 0.8;
+          this.sprite.setVelocityX(velocity.x + (driftTarget - velocity.x) * 0.06);
+        }
         this.flapTime += delta;
       } else if (!isGrounded && velocity.y > NORMAL_MAX_FALL) {
         this.sprite.setVelocityY(NORMAL_MAX_FALL);
@@ -271,12 +283,56 @@ export default class Elephant {
     if (this.isSwinging) {
       this.checkTrunkHits(props);
     }
+    this.updateBlasts(delta, props);
 
     // Record button states for next frame's justDown detection.
     for (const p of allPads) {
       for (let i = 0; i < (p.buttons?.length ?? 0); i++) {
         this._prevPadButtons[`${p.index}_${i}`] = p.buttons[i]?.pressed ?? false;
       }
+    }
+  }
+
+  fireBlast() {
+    const trunkX = this.trunk.x;
+    const trunkY = this.trunk.y;
+    this.blasts.push({
+      x: trunkX + this.facing * 40,
+      y: trunkY,
+      vx: this.facing * BLAST_SPEED,
+      life: BLAST_LIFETIME,
+      maxLife: BLAST_LIFETIME,
+      hitSet: new Set(),
+    });
+  }
+
+  updateBlasts(delta, props) {
+    this.blastGraphics.clear();
+    for (let i = this.blasts.length - 1; i >= 0; i--) {
+      const b = this.blasts[i];
+      b.x += b.vx;
+      b.life -= delta;
+      if (b.life <= 0) { this.blasts.splice(i, 1); continue; }
+
+      // Hit check
+      for (const prop of props) {
+        if (b.hitSet.has(prop)) continue;
+        const dx = prop.x - b.x;
+        const dy = prop.y - b.y;
+        if (Math.sqrt(dx * dx + dy * dy) <= BLAST_RADIUS + 30) {
+          b.hitSet.add(prop);
+          this.applyTrunkImpulse(prop);
+        }
+      }
+
+      // Draw puff ring
+      const t = 1 - b.life / b.maxLife;
+      const radius = BLAST_RADIUS + t * 18;
+      const alpha = (b.life / b.maxLife) * 0.75;
+      this.blastGraphics.lineStyle(4, 0xffffff, alpha);
+      this.blastGraphics.strokeCircle(b.x, b.y, radius);
+      this.blastGraphics.lineStyle(2, 0xaaeeff, alpha * 0.6);
+      this.blastGraphics.strokeCircle(b.x, b.y, radius * 0.6);
     }
   }
 
@@ -297,6 +353,7 @@ export default class Elephant {
       ease: 'Back.easeOut',
       yoyo: true,
       hold: 20,
+      onComplete: () => this.fireBlast(),
     });
   }
 
