@@ -143,8 +143,10 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.buildPalms();
 
     this.fruit = this.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y);
-    this.crate = this.addCrate(950, 850);
-    this.props = [this.fruit, this.crate];
+    this.crates = [];
+    const initialCrate = this.addCrate(950, 850);
+    this.crates.push(initialCrate);
+    this.props = [this.fruit, initialCrate];
 
     this.elephant = new Elephant(this, 180, 800);
 
@@ -227,11 +229,13 @@ export default class PlaygroundScene extends Phaser.Scene {
     const restartType = this.fruit?.fruitType ?? 'orange';
     this.fruit = this.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y, restartType);
     this.fruitArrow.setTint(FRUIT_CONFIGS[restartType].arrowTint);
-    if (this.crate) this.crate.destroy();
+    this.crates.forEach(c => c?.destroy());
+    this.crates = [];
     const crateX = 950;
     const crateY = Math.min(850, this.getTerrainYAt(crateX) - TEXTURE_SIZES.crate.height / 2 - 1);
-    this.crate = this.addCrate(crateX, crateY);
-    this.props = [this.fruit, this.crate];
+    const restartCrate = this.addCrate(crateX, crateY);
+    this.crates.push(restartCrate);
+    this.props = [this.fruit, restartCrate];
 
     // Reset elephant position and physics state above the new terrain.
     const spawnX = 180;
@@ -345,6 +349,19 @@ export default class PlaygroundScene extends Phaser.Scene {
 
       this.props.push(this.fruit);
     });
+
+    // Drop score-many crates from the sky, staggered
+    const crateCount = this.score;
+    for (let i = 0; i < crateCount; i++) {
+      this.time.delayedCall(FRUIT_RESPAWN_DELAY + i * 200, () => {
+        const spawnX = Phaser.Math.Between(150, this.worldWidth - 150);
+        const crate = this.addCrate(spawnX, -80);
+        this.matter.body.setVelocity(crate.body, { x: (Math.random() - 0.5) * 4, y: 2 });
+        this.matter.body.setAngularVelocity(crate.body, (Math.random() - 0.5) * 0.3);
+        this.crates.push(crate);
+        this.props.push(crate);
+      });
+    }
   }
 
   // Appends new terrain and content to the right. Old terrain is preserved.
@@ -975,16 +992,8 @@ export default class PlaygroundScene extends Phaser.Scene {
     });
 
     crateObj.destroy();
-    this.crate = null;
+    this.crates = this.crates.filter(c => c !== crateObj);
     this.props = this.props.filter(p => p !== crateObj);
-
-    // Respawn crate after 2 seconds
-    this.time.delayedCall(2000, () => {
-      const crateX = 950;
-      const crateY = Math.min(850, this.getTerrainYAt(crateX) - 32);
-      this.crate = this.addCrate(crateX, crateY);
-      this.props = [this.fruit, this.crate].filter(Boolean);
-    });
   }
 
   addGoal(x, y) {
