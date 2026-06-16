@@ -1,0 +1,51 @@
+{
+  "sprites": [
+    {
+      "fileName": "elephant_idle_1.png",
+      "width": 314,
+      "height": 244,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "fileName": "elephant_idle_2.png",
+      "width": 314,
+      "height": 244,
+      "x": 314,
+      "y": 0
+    },
+    {
+      "fileName": "elephant_jump_down.png",
+      "width": 314,
+      "height": 244,
+      "x": 628,
+      "y": 0
+    },
+    {
+      "fileName": "elephant_jump_up.png",
+      "width": 314,
+      "height": 244,
+      "x": 942,
+      "y": 0
+    },
+    {
+      "fileName": "elephant_run_1.png",
+      "width": 314,
+      "height": 244,
+      "x": 1256,
+      "y": 0
+    },
+    {
+      "fileName": "elephant_celebtration_1.png",
+      "width": 314,
+      "height": 244,
+      "x": 1570,
+      "y": 0
+    }
+  ],
+  "packMode": "horizontal",
+  "padding": 0,
+  "backgroundColor": "rgba(0, 0, 0, 0)",
+  "spriteSheetWidth": 1884,
+  "spriteSheetHeight": 244
+}

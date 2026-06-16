@@ -1,0 +1,23 @@
+{
+  "sprites": [
+    {
+      "fileName": "toucan_flying_1.png",
+      "width": 314,
+      "height": 244,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "fileName": "toucan_flying_2.png",
+      "width": 314,
+      "height": 244,
+      "x": 314,
+      "y": 0
+    }
+  ],
+  "packMode": "grid",
+  "padding": 0,
+  "backgroundColor": "rgba(0, 0, 0, 0)",
+  "spriteSheetWidth": 628,
+  "spriteSheetHeight": 244
+}

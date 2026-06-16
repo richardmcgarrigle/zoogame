@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\richa\\\\source\\\\repos\\\\zoogame\\\\src\" -Recurse)",
+      "Bash(Select-Object FullName)",
+      "PowerShell(Move-Item \"C:\\\\Users\\\\richa\\\\source\\\\repos\\\\zoogame\\\\toucan_flying_1.png\" \"C:\\\\Users\\\\richa\\\\source\\\\repos\\\\zoogame\\\\src\\\\assets\\\\toucan_flying_1.png\")",
+      "PowerShell(Move-Item \"C:\\\\Users\\\\richa\\\\source\\\\repos\\\\zoogame\\\\toucan_flying_2.png\" \"C:\\\\Users\\\\richa\\\\source\\\\repos\\\\zoogame\\\\src\\\\assets\\\\toucan_flying_2.png\")"
+    ]
+  }
+}
