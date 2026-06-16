@@ -517,8 +517,9 @@ export default class PlaygroundScene extends Phaser.Scene {
     const rotatedHalfH = (refBounds.maxY - refBounds.minY) / 2;
     const effectiveMaxY = GROUND_SURFACE_Y - ELEPHANT_CLEARANCE - rotatedHalfH;
 
-    const minX = Math.max(chunkStartX + PLATFORM_MARGIN_X, PLATFORM_MARGIN_X);
-    const maxX = Math.min(chunkEndX - PLATFORM_MARGIN_X, this.worldWidth - PLATFORM_MARGIN_X);
+    // Constrain to world edges only; mini-chunk boundaries are just anchor hints.
+    const minX = PLATFORM_MARGIN_X;
+    const maxX = this.worldWidth - PLATFORM_MARGIN_X;
     if (minX >= maxX) return;
 
     // Root platforms sit above ground; children float near their parent.
