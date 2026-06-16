@@ -260,6 +260,60 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.score += 1;
     this.scoreText.setText(`Score: ${this.score}`);
 
+    // Flash the score text
+    let flashes = 0;
+    const flashTimer = this.time.addEvent({
+      delay: 120,
+      repeat: 9,
+      callback: () => {
+        flashes++;
+        this.scoreText.setVisible(flashes % 2 === 0);
+      },
+      callbackScope: this,
+    });
+    this.time.delayedCall(1200, () => {
+      flashTimer.remove();
+      this.scoreText.setVisible(true);
+    });
+
+    // Show big GOAL! text in the centre of the screen
+    const { width, height } = this.scale;
+    const goalLabel = this.add
+      .text(width / 2, height / 2, 'GOAL!', {
+        fontFamily: 'Impact, "Arial Black", sans-serif',
+        fontSize: '120px',
+        color: '#ffffff',
+        stroke: '#e63c00',
+        strokeThickness: 10,
+        shadow: { offsetX: 4, offsetY: 4, color: '#000', blur: 8, fill: true },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(200)
+      .setAlpha(0);
+
+    this.tweens.add({
+      targets: goalLabel,
+      alpha: { from: 0, to: 1 },
+      scaleX: { from: 0.5, to: 1 },
+      scaleY: { from: 0.5, to: 1 },
+      duration: 250,
+      ease: 'Back.Out',
+      yoyo: false,
+      onComplete: () => {
+        this.tweens.add({
+          targets: goalLabel,
+          alpha: 0,
+          scaleX: 1.3,
+          scaleY: 1.3,
+          delay: 700,
+          duration: 400,
+          ease: 'Power2',
+          onComplete: () => goalLabel.destroy(),
+        });
+      },
+    });
+
     this.celebrateGoal(this.fruit.x, this.fruit.y);
     this.growWorld();
     this.buildGround();
