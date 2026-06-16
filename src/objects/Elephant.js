@@ -104,9 +104,17 @@ export default class Elephant {
         this.contactBodies.set(surfaceBody.id, surfaceBody);
       }
       if (a === 'elephant' && this.isKickableLabel(b)) {
-        this.applyKickImpulse(bodyA, bodyB);
+        if (this.isDashing && b === 'crate') {
+          this.scene.explodeCrate(bodyB.gameObject);
+        } else {
+          this.applyKickImpulse(bodyA, bodyB);
+        }
       } else if (b === 'elephant' && this.isKickableLabel(a)) {
-        this.applyKickImpulse(bodyB, bodyA);
+        if (this.isDashing && a === 'crate') {
+          this.scene.explodeCrate(bodyA.gameObject);
+        } else {
+          this.applyKickImpulse(bodyB, bodyA);
+        }
       }
     }
   }

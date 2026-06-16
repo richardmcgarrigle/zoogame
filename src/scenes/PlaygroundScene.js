@@ -940,6 +940,53 @@ export default class PlaygroundScene extends Phaser.Scene {
     return crate;
   }
 
+  explodeCrate(crateObj) {
+    if (!crateObj || !crateObj.active) return;
+    const x = crateObj.x;
+    const y = crateObj.y;
+
+    // Spawn debris rectangles that fly outward and fade
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
+      const speed = 200 + Math.random() * 300;
+      const size = 8 + Math.random() * 14;
+      const debris = this.add.rectangle(x, y, size, size, 0x8b5e3c).setDepth(8);
+      this.tweens.add({
+        targets: debris,
+        x: x + Math.cos(angle) * speed * 0.5,
+        y: y + Math.sin(angle) * speed * 0.5 - 60,
+        angle: Math.random() * 360,
+        alpha: 0,
+        duration: 500 + Math.random() * 300,
+        ease: 'Power2',
+        onComplete: () => debris.destroy(),
+      });
+    }
+
+    // Flash ring
+    const flash = this.add.circle(x, y, 40, 0xffdd44, 0.8).setDepth(9);
+    this.tweens.add({
+      targets: flash,
+      scaleX: 3,
+      scaleY: 3,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => flash.destroy(),
+    });
+
+    crateObj.destroy();
+    this.crate = null;
+    this.props = this.props.filter(p => p !== crateObj);
+
+    // Respawn crate after 2 seconds
+    this.time.delayedCall(2000, () => {
+      const crateX = 950;
+      const crateY = Math.min(850, this.getTerrainYAt(crateX) - 32);
+      this.crate = this.addCrate(crateX, crateY);
+      this.props = [this.fruit, this.crate].filter(Boolean);
+    });
+  }
+
   addGoal(x, y) {
     const goal = this.matter.add.image(x, y, 'goal', null, { isStatic: true, isSensor: true });
     goal.body.label = 'goal';
