@@ -15,11 +15,16 @@ export default class SoundManager {
     osc.connect(gain);
     gain.connect(ctx.destination);
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(120, t);
-    osc.frequency.exponentialRampToValueAtTime(55, t + 0.08);
+    // Slightly randomize pitch and volume each step so no two sound identical.
+    const pitchStart = 100 + Math.random() * 40;
+    const pitchEnd   = 45  + Math.random() * 20;
+    const vol        = 0.3 + Math.random() * 0.2;
 
-    gain.gain.setValueAtTime(0.45, t);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(pitchStart, t);
+    osc.frequency.exponentialRampToValueAtTime(pitchEnd, t + 0.08);
+
+    gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
 
     osc.start(t);
@@ -27,14 +32,20 @@ export default class SoundManager {
   }
 
   // Call every update frame while the elephant is running on the ground.
-  tickFootsteps(delta, isGrounded, isMoving) {
-    if (!isGrounded || !isMoving) {
+  // speedAbs: absolute horizontal speed (px per physics unit).
+  tickFootsteps(delta, isGrounded, speedAbs) {
+    if (!isGrounded || speedAbs < 1) {
       this._footstepTimer = 0;
       return;
     }
+    // Faster movement → shorter interval. Walk ~4.5 ≈ 280ms, dash ~9 ≈ 160ms.
+    const baseInterval = Math.max(140, 340 - speedAbs * 22);
+    // ±25% random jitter so steps don't feel mechanical.
+    const interval = baseInterval * (0.75 + Math.random() * 0.5);
+
     this._footstepTimer += delta;
-    if (this._footstepTimer >= this._footstepInterval) {
-      this._footstepTimer -= this._footstepInterval;
+    if (this._footstepTimer >= interval) {
+      this._footstepTimer = 0;
       this._playFootstep();
     }
   }

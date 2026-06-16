@@ -1321,8 +1321,8 @@ export default class PlaygroundScene extends Phaser.Scene {
   update(time, delta) {
     this.elephant.update(time, delta, this.props);
     const el = this.elephant;
-    const isMoving = Math.abs(el.sprite.body.velocity.x) > 1;
-    this.sounds?.tickFootsteps(delta, el.groundContacts > 0, isMoving);
+    const speedAbs = Math.abs(el.sprite.body.velocity.x);
+    this.sounds?.tickFootsteps(delta, el.groundContacts > 0, speedAbs);
     this.updateIndicatorArrows();
     this.updateClouds(delta);
     this.updateBirds(delta);
