@@ -80,48 +80,78 @@ export default class SoundManager {
     osc.stop(t + 0.32);
   }
 
-  // Heavy wooden crate smash: bass thud + mid-frequency wood crack.
+  // Heavy wooden crate smash: sub-bass thud + rumble + wood crack + snap transient.
   playCrateBreak() {
     const ctx = this.ctx;
     const t = ctx.currentTime;
 
-    // Layer 1: deep impact thud — the elephant's mass hitting the crate.
+    // Layer 1: sub-bass punch — drops deep for a weighty feel.
     const thud = ctx.createOscillator();
     const thudGain = ctx.createGain();
     thud.connect(thudGain);
     thudGain.connect(ctx.destination);
     thud.type = 'sine';
-    thud.frequency.setValueAtTime(140, t);
-    thud.frequency.exponentialRampToValueAtTime(40, t + 0.18);
-    thudGain.gain.setValueAtTime(0.9, t);
-    thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    thud.frequency.setValueAtTime(200, t);
+    thud.frequency.exponentialRampToValueAtTime(22, t + 0.35);
+    thudGain.gain.setValueAtTime(1.4, t);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
     thud.start(t);
-    thud.stop(t + 0.28);
+    thud.stop(t + 0.45);
 
-    // Layer 2: wood splinter crack — bandpass noise in the midrange.
-    const duration = 0.45;
-    const bufSize = Math.ceil(ctx.sampleRate * duration);
-    const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+    // Layer 2: low-frequency rumble noise for body/weight.
+    const rumbleBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.5), ctx.sampleRate);
+    const rumbleData = rumbleBuf.getChannelData(0);
+    for (let i = 0; i < rumbleData.length; i++) rumbleData[i] = Math.random() * 2 - 1;
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = rumbleBuf;
+    const rumbleBp = ctx.createBiquadFilter();
+    rumbleBp.type = 'lowpass';
+    rumbleBp.frequency.value = 180;
+    const rumbleGain = ctx.createGain();
+    rumbleGain.gain.setValueAtTime(1.2, t);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    rumble.connect(rumbleBp);
+    rumbleBp.connect(rumbleGain);
+    rumbleGain.connect(ctx.destination);
+    rumble.start(t);
+    rumble.stop(t + 0.5);
 
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    // Layer 3: mid-range wood crack noise.
+    const crackBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.4), ctx.sampleRate);
+    const crackData = crackBuf.getChannelData(0);
+    for (let i = 0; i < crackData.length; i++) crackData[i] = Math.random() * 2 - 1;
+    const crack = ctx.createBufferSource();
+    crack.buffer = crackBuf;
+    const crackBp = ctx.createBiquadFilter();
+    crackBp.type = 'bandpass';
+    crackBp.frequency.value = 500;
+    crackBp.Q.value = 0.6;
+    const crackGain = ctx.createGain();
+    crackGain.gain.setValueAtTime(1.1, t);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    crack.connect(crackBp);
+    crackBp.connect(crackGain);
+    crackGain.connect(ctx.destination);
+    crack.start(t);
+    crack.stop(t + 0.4);
 
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 350;
-    bp.Q.value = 0.8;
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.8, t);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-
-    noise.connect(bp);
-    bp.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-    noise.start(t);
-    noise.stop(t + duration);
+    // Layer 4: high-frequency snap transient for impact sharpness.
+    const snapBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.08), ctx.sampleRate);
+    const snapData = snapBuf.getChannelData(0);
+    for (let i = 0; i < snapData.length; i++) snapData[i] = Math.random() * 2 - 1;
+    const snap = ctx.createBufferSource();
+    snap.buffer = snapBuf;
+    const snapHp = ctx.createBiquadFilter();
+    snapHp.type = 'highpass';
+    snapHp.frequency.value = 2000;
+    const snapGain = ctx.createGain();
+    snapGain.gain.setValueAtTime(0.9, t);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    snap.connect(snapHp);
+    snapHp.connect(snapGain);
+    snapGain.connect(ctx.destination);
+    snap.start(t);
+    snap.stop(t + 0.08);
   }
 
   // Short "land" thud — heavier than a footstep.
