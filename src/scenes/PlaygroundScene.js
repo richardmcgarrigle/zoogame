@@ -364,8 +364,8 @@ export default class PlaygroundScene extends Phaser.Scene {
     for (const p of this.platforms) {
       placedBounds.push(this.getPlatformBounds(p.x, p.y, p.scaleX, p.angle));
     }
-    this.buildPlatformsForChunk(prevWidth, this.worldWidth, placedBounds);
-    this.buildPalmsForChunk(prevWidth, this.worldWidth);
+    this.buildPlatformsForChunk(prevWidth, this.worldWidth, placedBounds, true);
+    this.buildPalmsForChunk(prevWidth, this.worldWidth, true);
   }
 
   // Appends new terrain points and physics bodies from prevWidth to newWidth,
@@ -487,7 +487,7 @@ export default class PlaygroundScene extends Phaser.Scene {
 
   // Spawns platform clusters within [startX, endX]. placedBounds is shared
   // across all clusters so they avoid each other and the goal.
-  buildPlatformsForChunk(startX, endX, placedBounds) {
+  buildPlatformsForChunk(startX, endX, placedBounds, animate = false) {
     const maxAngle = Math.min(this.score * PLATFORM_ANGLE_PER_SCORE, PLATFORM_MAX_ANGLE);
     const miniChunkCount = Math.ceil((endX - startX) / CLUSTER_MINI_CHUNK_WIDTH);
 
@@ -506,14 +506,14 @@ export default class PlaygroundScene extends Phaser.Scene {
 
       if (Math.random() < clusterChance) {
         const groundY = this.getTerrainYAt(miniCenter);
-        this.spawnPlatformCluster(miniCenter, groundY, miniStart, miniEnd, maxAngle, placedBounds, 0);
+        this.spawnPlatformCluster(miniCenter, groundY, miniStart, miniEnd, maxAngle, placedBounds, 0, animate);
       }
     }
   }
 
   // Recursively places a platform near (anchorX, anchorY) then dresses it
   // with child platforms at decreasing probability per depth level.
-  spawnPlatformCluster(anchorX, anchorY, chunkStartX, chunkEndX, maxAngle, placedBounds, depth) {
+  spawnPlatformCluster(anchorX, anchorY, chunkStartX, chunkEndX, maxAngle, placedBounds, depth, animate = false) {
     if (depth > CLUSTER_MAX_DEPTH) return;
 
     const scale = Phaser.Math.FloatBetween(PLATFORM_MIN_SCALE, PLATFORM_MAX_SCALE);
@@ -568,6 +568,11 @@ export default class PlaygroundScene extends Phaser.Scene {
     platform.setAngle(angle);
     this.platforms.push(platform);
 
+    if (animate) {
+      platform.setAlpha(0);
+      this.tweens.add({ targets: platform, alpha: 1, duration: 600, ease: 'Power2.Out' });
+    }
+
     // Spread to neighbouring platforms with probability decaying by depth.
     const spreadChance = Math.min(
       CLUSTER_SPREAD_BASE + this.score * CLUSTER_SPREAD_PER_SCORE,
@@ -584,7 +589,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       const nx = px + Phaser.Math.Between(PLATFORM_GAP_X_MIN, PLATFORM_GAP_X_MAX);
       const ny = py + Phaser.Math.Between(-PLATFORM_GAP_Y_MAX / 2, PLATFORM_GAP_Y_MAX / 2);
       if (nx < maxX) {
-        this.spawnPlatformCluster(nx, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1);
+        this.spawnPlatformCluster(nx, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1, animate);
       }
     }
     // Left neighbour
@@ -592,14 +597,14 @@ export default class PlaygroundScene extends Phaser.Scene {
       const nx = px - Phaser.Math.Between(PLATFORM_GAP_X_MIN, PLATFORM_GAP_X_MAX);
       const ny = py + Phaser.Math.Between(-PLATFORM_GAP_Y_MAX / 2, PLATFORM_GAP_Y_MAX / 2);
       if (nx > minX) {
-        this.spawnPlatformCluster(nx, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1);
+        this.spawnPlatformCluster(nx, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1, animate);
       }
     }
     // Stack above (only shallow depths to prevent infinitely tall towers)
     if (depth < 2 && Math.random() < spreadChance * 0.5) {
       const ny = py - Phaser.Math.Between(PLATFORM_GAP_Y_MIN_FROM_GROUND, PLATFORM_GAP_Y_MAX);
       if (ny > PLATFORM_MIN_Y) {
-        this.spawnPlatformCluster(px, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1);
+        this.spawnPlatformCluster(px, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1, animate);
       }
     }
   }
@@ -913,7 +918,7 @@ export default class PlaygroundScene extends Phaser.Scene {
 
   // Adds palm trees for the [startX, endX] range, avoiding platform bands
   // and keeping a minimum gap from every already-placed tree.
-  buildPalmsForChunk(startX, endX) {
+  buildPalmsForChunk(startX, endX, animate = false) {
     const TREE_SCALE = 0.30;
     const TREE_MARGIN = 60;
     const TREE_MIN_GAP = 300; // minimum x distance between any two trees
@@ -940,11 +945,15 @@ export default class PlaygroundScene extends Phaser.Scene {
       if (tooClose) continue;
 
       const terrainY = this.getTerrainYAt(x);
+      const finalY = terrainY + 80;
       const tree = this.add
-        .image(x, terrainY + 80, 'palmtree')
+        .image(x, animate ? finalY + 600 : finalY, 'palmtree')
         .setOrigin(0.5, 1)
         .setScale(TREE_SCALE)
         .setDepth(0);
+      if (animate) {
+        this.tweens.add({ targets: tree, y: finalY, duration: 700, ease: 'Power2.Out' });
+      }
       this.palmTrees.push(tree);
     }
   }
