@@ -73,35 +73,48 @@ export default class SoundManager {
     osc.stop(t + 0.2);
   }
 
-  // Filtered white noise burst — crate explosion crack.
+  // Heavy wooden crate smash: bass thud + mid-frequency wood crack.
   playCrateBreak() {
     const ctx = this.ctx;
     const t = ctx.currentTime;
-    const duration = 0.22;
 
+    // Layer 1: deep impact thud — the elephant's mass hitting the crate.
+    const thud = ctx.createOscillator();
+    const thudGain = ctx.createGain();
+    thud.connect(thudGain);
+    thudGain.connect(ctx.destination);
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(140, t);
+    thud.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+    thudGain.gain.setValueAtTime(0.9, t);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    thud.start(t);
+    thud.stop(t + 0.28);
+
+    // Layer 2: wood splinter crack — bandpass noise in the midrange.
+    const duration = 0.45;
     const bufSize = Math.ceil(ctx.sampleRate * duration);
     const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
 
-    // High-pass to make it crackly, not boomy.
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 800;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 350;
+    bp.Q.value = 0.8;
 
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.6, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.8, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
-    source.connect(hp);
-    hp.connect(gain);
-    gain.connect(ctx.destination);
-
-    source.start(t);
-    source.stop(t + duration);
+    noise.connect(bp);
+    bp.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(t);
+    noise.stop(t + duration);
   }
 
   // Short "land" thud — heavier than a footstep.
