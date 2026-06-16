@@ -7,8 +7,6 @@ const OUTLINE = 0x1a1a1a;
 const OUTLINE_WIDTH = 6;
 
 export const TEXTURE_SIZES = {
-  elephantEar: { width: 60, height: 70 },
-  elephantTrunk: { width: 90, height: 26 },
   platformLeaf: { width: 260, height: 36 },
   orange: { width: 56, height: 56 },
   apple:  { width: 56, height: 56 },
@@ -34,28 +32,6 @@ function starPoints(cx, cy, outerR, innerR) {
 
 export function generatePlaceholderTextures(scene) {
   const g = scene.add.graphics();
-
-  // Ear: rounded oval, slightly lighter than body.
-  {
-    const { width: w, height: h } = TEXTURE_SIZES.elephantEar;
-    g.clear();
-    g.fillStyle(0x9bb0c4, 1);
-    g.lineStyle(OUTLINE_WIDTH, OUTLINE, 1);
-    g.fillEllipse(w / 2, h / 2, w - OUTLINE_WIDTH, h - OUTLINE_WIDTH);
-    g.strokeEllipse(w / 2, h / 2, w - OUTLINE_WIDTH, h - OUTLINE_WIDTH);
-    g.generateTexture('elephantEar', w, h);
-  }
-
-  // Trunk: elongated rounded capsule.
-  {
-    const { width: w, height: h } = TEXTURE_SIZES.elephantTrunk;
-    g.clear();
-    g.fillStyle(0x7c93a8, 1);
-    g.lineStyle(OUTLINE_WIDTH, OUTLINE, 1);
-    g.fillRoundedRect(OUTLINE_WIDTH / 2, OUTLINE_WIDTH / 2, w - OUTLINE_WIDTH, h - OUTLINE_WIDTH, h / 2);
-    g.strokeRoundedRect(OUTLINE_WIDTH / 2, OUTLINE_WIDTH / 2, w - OUTLINE_WIDTH, h - OUTLINE_WIDTH, h / 2);
-    g.generateTexture('elephantTrunk', w, h);
-  }
 
   // Leaf platform: chunky rounded green branch.
   {

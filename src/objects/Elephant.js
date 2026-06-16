@@ -3,19 +3,8 @@ import Phaser from 'phaser';
 const MOVE_SPEED = 4.5;
 const MOVE_SPEED_AIR = 3.2;
 const JUMP_VELOCITY = -11;
-const GLIDE_MAX_FALL = 1.6;
 const NORMAL_MAX_FALL = 11;
 const STOMP_FALL_THRESHOLD = 7;
-
-const TRUNK_REST_ANGLE = Phaser.Math.DEG_TO_RAD * 25;
-const TRUNK_SWING_ANGLE = Phaser.Math.DEG_TO_RAD * -110;
-const TRUNK_SWING_DURATION = 220;
-const TRUNK_HIT_RADIUS = 70;
-const TRUNK_SWING_COOLDOWN = 320;
-
-const BLAST_SPEED = 14;
-const BLAST_RADIUS = 38;
-const BLAST_LIFETIME = 600;  // ms
 
 const BODY_SCALE = 0.4;
 
@@ -24,8 +13,8 @@ const KICK_POWER_SCALE = 1.6;
 
 const DASH_SPEED = 9;
 
-const WIND_STREAK_LIFE = 260;      // ms each streak lives
-const WIND_STREAK_SPEED = 280;     // world px/sec the streaks slide backward
+const WIND_STREAK_LIFE = 260;
+const WIND_STREAK_SPEED = 280;
 const WIND_STREAK_LEN_MIN = 35;
 const WIND_STREAK_LEN_MAX = 100;
 
@@ -52,36 +41,16 @@ export default class Elephant {
     }
     this.sprite.play('elephant-idle');
 
-    const bw = this.sprite.displayWidth;
-    const bh = this.sprite.displayHeight;
-
-    this.earBack = scene.add.image(x, y, 'elephantEar').setOrigin(0.8, 0.5).setDepth(9).setVisible(false);
-    this.earFront = scene.add.image(x, y, 'elephantEar').setOrigin(0.8, 0.5).setDepth(11).setVisible(false);
-    this.earOffset = { x: -bw * 0.22, y: -bh * 0.32 };
-
-    this.trunk = scene.add.image(x, y, 'elephantTrunk').setOrigin(0.08, 0.5).setDepth(12).setVisible(false);
-    this.trunkOffset = { x: bw * 0.46, y: bh * 0.12 };
-    this.trunk.rotation = TRUNK_REST_ANGLE;
-
     this.windGraphics = scene.add.graphics().setDepth(9);
     this.windStreaks = [];
     this.isDashing = false;
-
-    this.blastGraphics = scene.add.graphics().setDepth(13);
-    this.blasts = [];
 
     this._prevPadButtons = {};
     this.celebrateTimer = 0;
 
     this.facing = 1;
-    this.isGliding = false;
-    this.isSwinging = false;
-    this.swingTimer = 0;
-    this.swingCooldownTimer = 0;
-    this.swingHitSet = new Set();
     this.groundContacts = 0;
     this.wasGrounded = true;
-    this.flapTime = 0;
     this.surfaceAngle = 0;
     this.contactBodies = new Map();
 
@@ -89,7 +58,7 @@ export default class Elephant {
     scene.matter.world.on('collisionend', this.onCollisionEnd, this);
 
     this.cursors = scene.input.keyboard.createCursorKeys();
-    this.keys = scene.input.keyboard.addKeys('W,A,S,D,SHIFT,X');
+    this.keys = scene.input.keyboard.addKeys('W,A,S,D');
   }
 
   isPlatformLabel(label) {
@@ -184,10 +153,6 @@ export default class Elephant {
         Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
         Phaser.Input.Keyboard.JustDown(this.keys.W) ||
         pads.some(p => padJustDown(p, 0) || padJustDown(p, 12));
-      const glideHeld = this.cursors.shift?.isDown || this.keys.SHIFT.isDown ||
-        pads.some(p => padPressed(p, 4) || (p.buttons?.[6]?.value ?? 0) > 0.5 || padPressed(p, 1));
-      const swingPressed = Phaser.Input.Keyboard.JustDown(this.keys.X) ||
-        pads.some(p => padJustDown(p, 3));
       const dashHeld =
         this.cursors.space?.isDown ||
         pads.some(p => padPressed(p, 2));
@@ -218,19 +183,8 @@ export default class Elephant {
         this.sprite.setVelocityY(JUMP_VELOCITY);
       }
 
-      // --- Ear-glide drift ---
-      this.isGliding = glideHeld && !isGrounded && velocity.y > 0;
-      if (this.isGliding) {
-        if (velocity.y > GLIDE_MAX_FALL) {
-          this.sprite.setVelocityY(GLIDE_MAX_FALL);
-        }
-        // Gently push forward if no directional input, so glide carries you
-        if (!left && !right) {
-          const driftTarget = this.facing * MOVE_SPEED_AIR * 0.8;
-          this.sprite.setVelocityX(velocity.x + (driftTarget - velocity.x) * 0.06);
-        }
-        this.flapTime += delta;
-      } else if (!isGrounded && velocity.y > NORMAL_MAX_FALL) {
+      // --- Fall cap ---
+      if (!isGrounded && velocity.y > NORMAL_MAX_FALL) {
         this.sprite.setVelocityY(NORMAL_MAX_FALL);
       }
 
@@ -248,8 +202,6 @@ export default class Elephant {
       }
 
       // --- Animation ---
-      // Only show airborne animations when genuinely in the air (not just skimming a slope).
-      // Require meaningful upward velocity for jump-up, and meaningful downward velocity for fall.
       if (!isGrounded && velocity.y < -1) {
         this.sprite.play('elephant-jump-up', true);
         this.sprite.anims.timeScale = 1;
@@ -263,27 +215,11 @@ export default class Elephant {
         this.sprite.play('elephant-idle', true);
         this.sprite.anims.timeScale = 1;
       }
-
-      // --- Trunk swing ---
-      if (this.swingCooldownTimer > 0) this.swingCooldownTimer -= delta;
-      if (swingPressed && !this.isSwinging && this.swingCooldownTimer <= 0) {
-        this.startSwing();
-      }
-      if (this.isSwinging) {
-        this.swingTimer -= delta;
-        if (this.swingTimer <= 0) {
-          this.isSwinging = false;
-        }
-      }
     } // end !isFrozen
 
     this.wasGrounded = isGrounded;
     this.updateVisuals(time);
     this.updateWindEffect(delta);
-    if (this.isSwinging) {
-      this.checkTrunkHits(props);
-    }
-    this.updateBlasts(delta, props);
 
     // Record button states for next frame's justDown detection.
     for (const p of allPads) {
@@ -291,70 +227,6 @@ export default class Elephant {
         this._prevPadButtons[`${p.index}_${i}`] = p.buttons[i]?.pressed ?? false;
       }
     }
-  }
-
-  fireBlast() {
-    const trunkX = this.trunk.x;
-    const trunkY = this.trunk.y;
-    this.blasts.push({
-      x: trunkX + this.facing * 40,
-      y: trunkY,
-      vx: this.facing * BLAST_SPEED,
-      life: BLAST_LIFETIME,
-      maxLife: BLAST_LIFETIME,
-      hitSet: new Set(),
-    });
-  }
-
-  updateBlasts(delta, props) {
-    this.blastGraphics.clear();
-    for (let i = this.blasts.length - 1; i >= 0; i--) {
-      const b = this.blasts[i];
-      b.x += b.vx;
-      b.life -= delta;
-      if (b.life <= 0) { this.blasts.splice(i, 1); continue; }
-
-      // Hit check
-      for (const prop of props) {
-        if (b.hitSet.has(prop)) continue;
-        const dx = prop.x - b.x;
-        const dy = prop.y - b.y;
-        if (Math.sqrt(dx * dx + dy * dy) <= BLAST_RADIUS + 30) {
-          b.hitSet.add(prop);
-          this.applyTrunkImpulse(prop);
-        }
-      }
-
-      // Draw puff ring
-      const t = 1 - b.life / b.maxLife;
-      const radius = BLAST_RADIUS + t * 18;
-      const alpha = (b.life / b.maxLife) * 0.75;
-      this.blastGraphics.lineStyle(4, 0xffffff, alpha);
-      this.blastGraphics.strokeCircle(b.x, b.y, radius);
-      this.blastGraphics.lineStyle(2, 0xaaeeff, alpha * 0.6);
-      this.blastGraphics.strokeCircle(b.x, b.y, radius * 0.6);
-    }
-  }
-
-  startSwing() {
-    this.isSwinging = true;
-    this.swingTimer = TRUNK_SWING_DURATION;
-    this.swingCooldownTimer = TRUNK_SWING_COOLDOWN;
-    this.swingHitSet.clear();
-
-    const restAngle = TRUNK_REST_ANGLE * this.facing;
-    const swingAngle = TRUNK_SWING_ANGLE * this.facing;
-
-    this.trunk.rotation = restAngle;
-    this.scene.tweens.add({
-      targets: this.trunk,
-      rotation: swingAngle,
-      duration: TRUNK_SWING_DURATION * 0.55,
-      ease: 'Back.easeOut',
-      yoyo: true,
-      hold: 20,
-      onComplete: () => this.fireBlast(),
-    });
   }
 
   updateWindEffect(delta) {
@@ -393,35 +265,8 @@ export default class Elephant {
   }
 
   updateVisuals(time) {
-    const x = this.sprite.x;
-    const y = this.sprite.y;
     const facing = this.facing;
-
     this.sprite.setFlipX(facing < 0);
-
-    const earX = x + this.earOffset.x * facing;
-    const earY = y + this.earOffset.y;
-
-    let flapScaleY = 1;
-    if (this.isGliding) {
-      flapScaleY = 0.85 + Math.sin(this.flapTime * 0.03) * 0.25;
-    }
-
-    this.earBack.setPosition(earX - 8 * facing, earY + 4);
-    this.earBack.setFlipX(facing < 0);
-    this.earBack.setScale(1, flapScaleY * 0.95);
-    this.earBack.setVisible(this.isGliding);
-
-    this.earFront.setPosition(earX + 14 * facing, earY - 2);
-    this.earFront.setFlipX(facing < 0);
-    this.earFront.setScale(1, flapScaleY);
-    this.earFront.setVisible(this.isGliding);
-
-    const trunkX = x + this.trunkOffset.x * facing;
-    const trunkY = y + this.trunkOffset.y;
-    this.trunk.setPosition(trunkX, trunkY);
-    this.trunk.setFlipX(facing < 0);
-    this.trunk.setVisible(this.isSwinging);
 
     // Tilt the sprite to match the slope of the surface being stood on.
     const isGrounded = this.groundContacts > 0;
@@ -430,38 +275,17 @@ export default class Elephant {
       let sum = 0;
       for (const b of this.contactBodies.values()) sum += b.angle;
       targetAngle = sum / this.contactBodies.size;
-      // Clamp to ±35° so extreme collisions don't look absurd.
       targetAngle = Phaser.Math.Clamp(targetAngle, -0.61, 0.61);
     }
     this.surfaceAngle += (targetAngle - this.surfaceAngle) * 0.18;
     this.sprite.rotation = this.surfaceAngle;
   }
 
-  checkTrunkHits(props) {
-    const tipDistance = this.scene.textures.get('elephantTrunk').getSourceImage().width * 0.85;
-    const tipX = this.trunk.x + Math.cos(this.trunk.rotation) * tipDistance * (this.facing < 0 ? -1 : 1);
-    const tipY = this.trunk.y + Math.sin(this.trunk.rotation) * tipDistance;
-
-    for (const prop of props) {
-      if (this.swingHitSet.has(prop)) continue;
-      const dx = prop.x - tipX;
-      const dy = prop.y - tipY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= TRUNK_HIT_RADIUS) {
-        this.swingHitSet.add(prop);
-        this.applyTrunkImpulse(prop);
-      }
-    }
-  }
-
   applyKickImpulse(elephantBody, propBody) {
-    // Direction from elephant centre to prop so the ball always flies away
-    // from the contact point, even when the elephant is standing still.
     const dx = propBody.position.x - elephantBody.position.x;
     const dirX = dx !== 0 ? Math.sign(dx) : this.facing;
     const vx = elephantBody.velocity.x;
     const vy = elephantBody.velocity.y;
-    // Floor to KICK_MIN_SPEED so a stationary touch still launches the ball.
     const speed = Math.max(Math.abs(vx), KICK_MIN_SPEED);
 
     this.scene.matter.body.setVelocity(propBody, {
@@ -469,16 +293,5 @@ export default class Elephant {
       y: Math.min(vy, 0) - 2.5 - Math.random() * 1.5,
     });
     this.scene.matter.body.setAngularVelocity(propBody, dirX * 0.25);
-  }
-
-  applyTrunkImpulse(prop) {
-    const body = prop.body;
-    const dirX = this.facing;
-    const power = 6 + Math.random() * 2;
-    this.scene.matter.body.setVelocity(body, {
-      x: dirX * power,
-      y: -3 - Math.random() * 2,
-    });
-    this.scene.matter.body.setAngularVelocity(body, dirX * 0.3 * (Math.random() > 0.5 ? 1 : -1));
   }
 }

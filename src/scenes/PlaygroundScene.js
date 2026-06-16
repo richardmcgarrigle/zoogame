@@ -34,7 +34,7 @@ const PLATFORM_MIN_Y = 250;
 const ELEPHANT_CLEARANCE = 110;
 const PLATFORM_MAX_Y = GROUND_SURFACE_Y - ELEPHANT_CLEARANCE - (TEXTURE_SIZES.platformLeaf.height * PLATFORM_MAX_SCALE) / 2;
 
-// Keep consecutive platforms within the elephant's jump (with glide) reach.
+// Keep consecutive platforms within the elephant's jump reach.
 const PLATFORM_GAP_X_MIN = 100;
 const PLATFORM_GAP_X_MAX = 220;
 const PLATFORM_GAP_Y_MAX = 140;
@@ -169,7 +169,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     });
 
     this.add
-      .text(12, 12, 'Move: Arrows/AD  Jump: Up/W  Dash: Space/Square (hold)  Glide: Shift (hold in air, drifts forward)  Swat: X (+ remote blast)  Restart: R', {
+      .text(12, 12, 'Move: Arrows/AD  Jump: Up/W  Dash: Space/Square (hold)  Restart: R', {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#1a1a1a',
