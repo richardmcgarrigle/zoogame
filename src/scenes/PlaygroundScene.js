@@ -356,11 +356,28 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.matter.world.setBounds(0, 0, this.worldWidth, WORLD_HEIGHT, 64, true, true, false, true);
     this.cameras.main.setBounds(0, -5000, this.worldWidth, WORLD_HEIGHT + 5000);
 
-    // Extend terrain, then move the goal, then add platforms and palms.
+    // Extend terrain first so getTerrainYAt works for the new chunk.
     this.extendTerrain(prevWidth, this.worldWidth);
-    this.repositionGoal();
 
-    const placedBounds = [this.getGoalBounds()];
+    // Compute the goal's new position and slide it there.
+    const newGoalX = this.worldWidth - 100;
+    const newGoalY = this.getTerrainYAt(newGoalX) - TEXTURE_SIZES.goal.height / 2;
+    this.tweens.add({
+      targets: this.goal,
+      x: newGoalX,
+      y: newGoalY,
+      duration: 900,
+      ease: 'Power2.Out',
+    });
+
+    // Seed placed bounds with the final goal position so platforms don't
+    // land on top of where the goal is heading.
+    const placedBounds = [{
+      minX: newGoalX - TEXTURE_SIZES.goal.width / 2,
+      maxX: newGoalX + TEXTURE_SIZES.goal.width / 2,
+      minY: newGoalY - TEXTURE_SIZES.goal.height / 2,
+      maxY: newGoalY + TEXTURE_SIZES.goal.height / 2,
+    }];
     for (const p of this.platforms) {
       placedBounds.push(this.getPlatformBounds(p.x, p.y, p.scaleX, p.angle));
     }
