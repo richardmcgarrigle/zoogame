@@ -50,7 +50,7 @@ export default class SoundManager {
     }
   }
 
-  // Spring boing — pitch rises sharply then falls slowly, like a cartoon spring.
+  // Spring twang — zigzag pitch that oscillates high/low while decaying.
   playBounce(velocityMagnitude = 5) {
     const ctx = this.ctx;
     const t = ctx.currentTime;
@@ -63,16 +63,21 @@ export default class SoundManager {
     gain.connect(ctx.destination);
 
     osc.type = 'sine';
-    // Sharp rise on impact, quick fall — keeps it punchy like a rubber ball.
-    osc.frequency.setValueAtTime(180, t);
-    osc.frequency.exponentialRampToValueAtTime(380, t + 0.025);
-    osc.frequency.exponentialRampToValueAtTime(140, t + 0.18);
+    // Oscillating peaks/valleys that decay — the characteristic spring wobble.
+    osc.frequency.setValueAtTime(620, t);
+    osc.frequency.exponentialRampToValueAtTime(280, t + 0.04);
+    osc.frequency.exponentialRampToValueAtTime(540, t + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(260, t + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(450, t + 0.16);
+    osc.frequency.exponentialRampToValueAtTime(240, t + 0.20);
+    osc.frequency.exponentialRampToValueAtTime(360, t + 0.24);
+    osc.frequency.exponentialRampToValueAtTime(200, t + 0.30);
 
     gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
 
     osc.start(t);
-    osc.stop(t + 0.2);
+    osc.stop(t + 0.32);
   }
 
   // Heavy wooden crate smash: bass thud + mid-frequency wood crack.
