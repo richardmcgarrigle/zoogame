@@ -28,6 +28,7 @@ const PLATFORM_MAX_COUNT = 10;
 const PLATFORM_MIN_SCALE = 0.6;
 const PLATFORM_MAX_SCALE = 1.4;
 const PLATFORM_ANGLE_PER_SCORE = 2;
+const PLATFORM_MIN_ANGLE = 8;
 const PLATFORM_MAX_ANGLE = 25;
 const PLATFORM_MARGIN_X = 150;
 const PLATFORM_MIN_Y = 250;
@@ -405,7 +406,9 @@ export default class PlaygroundScene extends Phaser.Scene {
       const isRoot = i === 0 || newRoot;
       newRoot = Math.random() < PLATFORM_NEW_ROOT_CHANCE;
       const scale = Phaser.Math.FloatBetween(PLATFORM_MIN_SCALE, PLATFORM_MAX_SCALE);
-      const angle = Phaser.Math.Between(-maxAngle, maxAngle);
+      const effectiveMax = Math.max(maxAngle, PLATFORM_MIN_ANGLE);
+      const sign = Math.random() < 0.5 ? 1 : -1;
+      const angle = sign * Phaser.Math.Between(PLATFORM_MIN_ANGLE, effectiveMax);
 
       // Compute the rotated half-height for this specific scale+angle so the
       // candidateY clamp accounts for how far the platform's bottom edge
