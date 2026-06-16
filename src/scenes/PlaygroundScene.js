@@ -438,17 +438,36 @@ export default class PlaygroundScene extends Phaser.Scene {
     const segments = Math.max(1, Math.round(chunkWidth / TERRAIN_SEGMENT_WIDTH));
     const amplitude = this.terrainAmplitude;
 
-    // Wavelengths in world units so hill frequency stays constant regardless
-    // of chunk size. Long primary wave (1–2 hills per chunk); shorter secondary
-    // wave is low-amplitude so it adds gentle texture without rapid spikes.
-    const wavelength1 = 1800 + Math.random() * 1800; // 1800–3600 px per cycle
-    const wavelength2 = 900  + Math.random() * 600;  // 900–1500 px per cycle
-    const phase1 = Math.random() * Math.PI * 2;
-    const phase2 = Math.random() * Math.PI * 2;
-    const amp1 = amplitude * (0.75 + Math.random() * 0.25);
-    const amp2 = amplitude * 0.2 * Math.random(); // subtle secondary
+    // First chunk: initialise wave state from scratch.
+    // Subsequent chunks: slowly drift wavelengths toward new random targets so
+    // each chunk inherits the character of the previous one rather than picking
+    // completely new parameters. Phases stay fixed — because we evaluate the
+    // wave at absolute x coordinates the sinusoid is automatically continuous
+    // across chunk boundaries.
+    if (!this.terrainWaveState) {
+      this.terrainWaveState = {
+        wavelength1: 2200 + Math.random() * 1400,
+        wavelength2: 1000 + Math.random() * 500,
+        phase1: Math.random() * Math.PI * 2,
+        phase2: Math.random() * Math.PI * 2,
+        amp1Factor: 0.75 + Math.random() * 0.25,
+        amp2Factor: 0.15 * Math.random(),
+      };
+    } else {
+      const ws = this.terrainWaveState;
+      // 25% blend toward a new random target each chunk — gradual evolution.
+      ws.wavelength1 = ws.wavelength1 * 0.75 + (1800 + Math.random() * 1800) * 0.25;
+      ws.wavelength2 = ws.wavelength2 * 0.75 + (900  + Math.random() * 600)  * 0.25;
+      ws.amp1Factor  = ws.amp1Factor  * 0.80 + (0.75 + Math.random() * 0.25) * 0.20;
+      ws.amp2Factor  = ws.amp2Factor  * 0.80 + (0.15 * Math.random())        * 0.20;
+      // Phases are intentionally left unchanged — see note above.
+    }
 
-    const BLEND_SEGS = 5; // blend from startY over first N segments
+    const { wavelength1, wavelength2, phase1, phase2, amp1Factor, amp2Factor } = this.terrainWaveState;
+    const amp1 = amplitude * amp1Factor;
+    const amp2 = amplitude * amp2Factor;
+
+    const BLEND_SEGS = 5; // smooth y-value join over first N segments
 
     const points = [];
     for (let i = 0; i <= segments; i++) {
@@ -461,8 +480,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       if (i === 0) {
         y = startY;
       } else if (i < BLEND_SEGS) {
-        const blend = i / BLEND_SEGS;
-        y = startY + (targetY - startY) * blend;
+        y = startY + (targetY - startY) * (i / BLEND_SEGS);
       } else {
         y = targetY;
       }
@@ -767,6 +785,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
     for (const g of this.groundGraphicsObjects ?? []) g.destroy();
     this.groundGraphicsObjects = [];
+    this.terrainWaveState = null; // reset so full rebuild picks fresh wave params
 
     const points = this.generateTerrainHeights();
     this.terrainPoints = points;
