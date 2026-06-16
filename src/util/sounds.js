@@ -132,23 +132,25 @@ export default class SoundManager {
 
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 900;
-    lp.Q.value = 1.2;
+    lp.frequency.value = 2200;
+    lp.Q.value = 0.8;
 
     const masterGain = ctx.createGain();
     masterGain.gain.setValueAtTime(0, t);
-    masterGain.gain.linearRampToValueAtTime(0.55, t + 0.06);
-    masterGain.gain.setValueAtTime(0.55, t + duration - 0.25);
+    masterGain.gain.linearRampToValueAtTime(0.5, t + 0.05);
+    masterGain.gain.setValueAtTime(0.5, t + duration - 0.3);
     masterGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
     lp.connect(masterGain);
     masterGain.connect(ctx.destination);
 
-    // Two slightly detuned oscillators for thickness.
-    for (const freq of [220, 226]) {
+    // Higher pitch with an upward sweep at the start — celebratory, not industrial.
+    for (const [start, end, detune] of [[360, 440, 0], [364, 445, 0]]) {
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
-      osc.frequency.value = freq;
+      osc.frequency.setValueAtTime(start, t);
+      osc.frequency.exponentialRampToValueAtTime(end, t + 0.12);
+      osc.detune.value = detune;
       osc.connect(lp);
       osc.start(t);
       osc.stop(t + duration);
