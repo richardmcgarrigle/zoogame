@@ -400,9 +400,17 @@ export default class PlaygroundScene extends Phaser.Scene {
       this.groundBodies.push(body);
     }
 
-    // Redraw the full ground graphics from the now-extended terrain points.
-    if (this.groundGraphics) this.groundGraphics.destroy();
-    this.drawGroundGraphics(this.terrainPoints);
+    // Draw only the new chunk; old chunk graphics stay in place.
+    // Slide the new section up from below for a smooth reveal.
+    const chunkGfx = this.drawGroundGraphicsSegment(segPoints);
+    chunkGfx.setPosition(0, 600);
+    this.tweens.add({
+      targets: chunkGfx,
+      y: 0,
+      duration: 700,
+      ease: 'Power2.Out',
+    });
+    (this.groundGraphicsObjects ??= []).push(chunkGfx);
   }
 
   // Generates terrain heights for a single chunk [startX, endX], blending
@@ -733,7 +741,8 @@ export default class PlaygroundScene extends Phaser.Scene {
     if (this.groundBodies) {
       for (const body of this.groundBodies) this.matter.world.remove(body);
     }
-    if (this.groundGraphics) this.groundGraphics.destroy();
+    for (const g of this.groundGraphicsObjects ?? []) g.destroy();
+    this.groundGraphicsObjects = [];
 
     const points = this.generateTerrainHeights();
     this.terrainPoints = points;
@@ -758,7 +767,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       this.groundBodies.push(body);
     }
 
-    this.drawGroundGraphics(points);
+    this.groundGraphicsObjects.push(this.drawGroundGraphicsSegment(points));
   }
 
   // Generates terrain heights for the full world. Amplitude ramps from near-zero
@@ -793,34 +802,41 @@ export default class PlaygroundScene extends Phaser.Scene {
     return points;
   }
 
-  drawGroundGraphics(points) {
-    this.groundGraphics = this.add.graphics().setDepth(1);
+  // Draws terrain for the given points array and returns the Graphics object.
+  // The caller is responsible for positioning, animating, and tracking it.
+  drawGroundGraphicsSegment(points) {
+    const gfx = this.add.graphics().setDepth(1);
 
     const splinePoints = points.map((p) => new Phaser.Math.Vector2(p.x, p.y));
     const curve = new Phaser.Curves.Spline(splinePoints);
-    const smooth = curve.getPoints(points.length * 8);
+    const smooth = curve.getPoints(Math.max(points.length * 8, 16));
 
-    this.groundGraphics.fillStyle(0x4f7a3a, 1);
-    this.groundGraphics.beginPath();
-    this.groundGraphics.moveTo(0, WORLD_HEIGHT);
-    for (const p of smooth) this.groundGraphics.lineTo(p.x, p.y);
-    this.groundGraphics.lineTo(this.worldWidth, WORLD_HEIGHT);
-    this.groundGraphics.closePath();
-    this.groundGraphics.fillPath();
+    const x0 = smooth[0].x;
+    const xEnd = smooth[smooth.length - 1].x;
 
-    this.groundGraphics.fillStyle(0x6fae4f, 1);
-    this.groundGraphics.beginPath();
-    this.groundGraphics.moveTo(smooth[0].x, smooth[0].y);
-    for (const p of smooth) this.groundGraphics.lineTo(p.x, p.y);
-    for (let i = smooth.length - 1; i >= 0; i--) this.groundGraphics.lineTo(smooth[i].x, smooth[i].y + 18);
-    this.groundGraphics.closePath();
-    this.groundGraphics.fillPath();
+    gfx.fillStyle(0x4f7a3a, 1);
+    gfx.beginPath();
+    gfx.moveTo(x0, WORLD_HEIGHT);
+    for (const p of smooth) gfx.lineTo(p.x, p.y);
+    gfx.lineTo(xEnd, WORLD_HEIGHT);
+    gfx.closePath();
+    gfx.fillPath();
 
-    this.groundGraphics.lineStyle(OUTLINE_WIDTH, OUTLINE, 1);
-    this.groundGraphics.beginPath();
-    this.groundGraphics.moveTo(smooth[0].x, smooth[0].y);
-    for (const p of smooth) this.groundGraphics.lineTo(p.x, p.y);
-    this.groundGraphics.strokePath();
+    gfx.fillStyle(0x6fae4f, 1);
+    gfx.beginPath();
+    gfx.moveTo(smooth[0].x, smooth[0].y);
+    for (const p of smooth) gfx.lineTo(p.x, p.y);
+    for (let i = smooth.length - 1; i >= 0; i--) gfx.lineTo(smooth[i].x, smooth[i].y + 18);
+    gfx.closePath();
+    gfx.fillPath();
+
+    gfx.lineStyle(OUTLINE_WIDTH, OUTLINE, 1);
+    gfx.beginPath();
+    gfx.moveTo(smooth[0].x, smooth[0].y);
+    for (const p of smooth) gfx.lineTo(p.x, p.y);
+    gfx.strokePath();
+
+    return gfx;
   }
 
   celebrateGoal(x, y) {
