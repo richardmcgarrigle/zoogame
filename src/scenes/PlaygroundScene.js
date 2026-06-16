@@ -894,10 +894,12 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.buildPalmsForChunk(0, this.worldWidth);
   }
 
-  // Adds palm trees for the [startX, endX] range, avoiding platform bands.
+  // Adds palm trees for the [startX, endX] range, avoiding platform bands
+  // and keeping a minimum gap from every already-placed tree.
   buildPalmsForChunk(startX, endX) {
     const TREE_SCALE = 0.30;
     const TREE_MARGIN = 60;
+    const TREE_MIN_GAP = 300; // minimum x distance between any two trees
     const platformBands = (this.platforms || []).map((p) => {
       const b = this.getPlatformBounds(p.x, p.y, p.scaleX, p.angle);
       return { minX: b.minX - TREE_MARGIN, maxX: b.maxX + TREE_MARGIN };
@@ -916,6 +918,9 @@ export default class PlaygroundScene extends Phaser.Scene {
 
       const blocked = platformBands.some((b) => x >= b.minX && x <= b.maxX);
       if (blocked) continue;
+
+      const tooClose = (this.palmTrees || []).some((t) => Math.abs(t.x - x) < TREE_MIN_GAP);
+      if (tooClose) continue;
 
       const terrainY = this.getTerrainYAt(x);
       const tree = this.add
