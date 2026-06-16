@@ -14,7 +14,7 @@ export const TEXTURE_SIZES = {
   crate: { width: 64, height: 64 },
   goal: { width: 120, height: 260 },
   star: { width: 32, height: 32 },
-  arrowIndicator: { width: 48, height: 36 },
+  arrowIndicator: { width: 72, height: 54 },
   cloud: { width: 160, height: 72 },
   bird: { width: 44, height: 20 },
 };
