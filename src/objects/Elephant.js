@@ -151,10 +151,11 @@ export default class Elephant {
         pads.some(p => padPressed(p, 15) || stickX(p) > STICK_DEAD);
       const jumpPressed =
         Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+        Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
         Phaser.Input.Keyboard.JustDown(this.keys.W) ||
         pads.some(p => padJustDown(p, 0) || padJustDown(p, 12));
       const dashHeld =
-        this.cursors.space?.isDown ||
+        this.cursors.shift?.isDown ||
         pads.some(p => padPressed(p, 2));
 
       // --- Dash (hold to sustain) ---
