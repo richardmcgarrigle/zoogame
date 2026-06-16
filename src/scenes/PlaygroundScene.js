@@ -18,7 +18,7 @@ const GROUND_SURFACE_Y = WORLD_HEIGHT - GROUND_HEIGHT;
 const GROUND_DEPTH = GROUND_HEIGHT + 60;
 const TERRAIN_SEGMENT_WIDTH = 60;
 
-const WIDTH_PER_SCORE = 300;
+const WIDTH_PER_SCORE = 600;
 const AMPLITUDE_PER_SCORE = 12;
 const MAX_TERRAIN_AMPLITUDE = 100;
 
@@ -903,7 +903,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       return { minX: b.minX - TREE_MARGIN, maxX: b.maxX + TREE_MARGIN };
     });
 
-    const spacing = 320;
+    const spacing = 560;
     const firstI = Math.floor(startX / spacing);
     const lastI = Math.ceil(endX / spacing) + 1;
 
