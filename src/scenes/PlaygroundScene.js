@@ -438,22 +438,23 @@ export default class PlaygroundScene extends Phaser.Scene {
     const segments = Math.max(1, Math.round(chunkWidth / TERRAIN_SEGMENT_WIDTH));
     const amplitude = this.terrainAmplitude;
 
-    const freq1 = 1 + Math.random() * 1.5;
-    const freq2 = 2.5 + Math.random() * 2;
+    // Wavelengths in world units so hill frequency stays constant regardless
+    // of chunk size. Long primary wave (1–2 hills per chunk); shorter secondary
+    // wave is low-amplitude so it adds gentle texture without rapid spikes.
+    const wavelength1 = 1800 + Math.random() * 1800; // 1800–3600 px per cycle
+    const wavelength2 = 900  + Math.random() * 600;  // 900–1500 px per cycle
     const phase1 = Math.random() * Math.PI * 2;
     const phase2 = Math.random() * Math.PI * 2;
-    const amp1Factor = 0.5 + Math.random() * 0.5;
-    const amp2Factor = 0.35 * Math.random();
+    const amp1 = amplitude * (0.75 + Math.random() * 0.25);
+    const amp2 = amplitude * 0.2 * Math.random(); // subtle secondary
 
     const BLEND_SEGS = 5; // blend from startY over first N segments
 
     const points = [];
     for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const amp1 = amplitude * amp1Factor;
-      const amp2 = amplitude * amp2Factor;
-      const wave = amp1 * Math.sin(t * Math.PI * 2 * freq1 + phase1) +
-                   amp2 * Math.sin(t * Math.PI * 2 * freq2 + phase2);
+      const x = startX + chunkWidth * (i / segments);
+      const wave = amp1 * Math.sin(x / wavelength1 * Math.PI * 2 + phase1) +
+                   amp2 * Math.sin(x / wavelength2 * Math.PI * 2 + phase2);
       const targetY = Math.min(GROUND_SURFACE_Y + wave, WORLD_HEIGHT - 10);
 
       let y;
@@ -466,7 +467,7 @@ export default class PlaygroundScene extends Phaser.Scene {
         y = targetY;
       }
 
-      points.push({ x: startX + chunkWidth * (i / segments), y });
+      points.push({ x, y });
     }
     return points;
   }
@@ -800,27 +801,29 @@ export default class PlaygroundScene extends Phaser.Scene {
     const segments = Math.max(1, Math.round(this.worldWidth / TERRAIN_SEGMENT_WIDTH));
     const maxAmplitude = this.terrainAmplitude;
 
-    const freq1 = 1 + Math.random() * 1.5;
-    const freq2 = 2.5 + Math.random() * 2;
+    // World-unit wavelengths so hill frequency is independent of world width.
+    const wavelength1 = 1800 + Math.random() * 1800; // 1800–3600 px per cycle
+    const wavelength2 = 900  + Math.random() * 600;  // 900–1500 px per cycle
     const phase1 = Math.random() * Math.PI * 2;
     const phase2 = Math.random() * Math.PI * 2;
-    const amp1Factor = 0.5 + Math.random() * 0.5;
-    const amp2Factor = 0.35 * Math.random();
+    const amp1Factor = 0.75 + Math.random() * 0.25;
+    const amp2Factor = 0.2 * Math.random();
 
     const points = [];
     for (let i = 0; i <= segments; i++) {
+      const x = (this.worldWidth * i) / segments;
       const t = i / segments;
-      // Power curve: amplitude is near zero at the left, full at the right.
+      // Power curve: amplitude ramps from near-zero at left to full at right.
       const xFraction = Math.pow(t, 1.3);
       const amp1 = maxAmplitude * amp1Factor * xFraction;
       const amp2 = maxAmplitude * amp2Factor * xFraction;
       const y = Math.min(
         GROUND_SURFACE_Y +
-          amp1 * Math.sin(t * Math.PI * 2 * freq1 + phase1) +
-          amp2 * Math.sin(t * Math.PI * 2 * freq2 + phase2),
+          amp1 * Math.sin(x / wavelength1 * Math.PI * 2 + phase1) +
+          amp2 * Math.sin(x / wavelength2 * Math.PI * 2 + phase2),
         WORLD_HEIGHT - 10,
       );
-      points.push({ x: (this.worldWidth * i) / segments, y });
+      points.push({ x, y });
     }
     return points;
   }
