@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { generatePlaceholderTextures, TEXTURE_SIZES } from '../util/textures.js';
 import Elephant from '../objects/Elephant.js';
+import SoundManager from '../util/sounds.js';
 import elephantCelebUrl  from '../assets/elephant_celebrate.png';
 import elephantIdleUrl    from '../assets/elephant_idle_1.png';
 import elephantRun1Url   from '../assets/elephant_run_1.png';
@@ -149,6 +150,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.props = [this.fruit, initialCrate];
 
     this.elephant = new Elephant(this, 180, 800);
+    this.sounds = new SoundManager(this.sound.context);
 
     // Allow negative scrollY so the floor sits at the window bottom even
     // when the viewport is taller than WORLD_HEIGHT.
@@ -252,6 +254,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     // the surface. Amplify that rebound so platforms feel springy.
     // vy < 0 = moving upward (bounced off top); vy > 0 = bounced off underside.
     if (Math.abs(vy) < 0.5) return;
+    this.sounds?.playBounce(Math.abs(vy));
     const BOOST = 1.5;
     const MIN_BOUNCE = 5;
     const boosted = Math.sign(vy) * Math.max(Math.abs(vy) * BOOST, MIN_BOUNCE);
@@ -991,6 +994,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       onComplete: () => flash.destroy(),
     });
 
+    this.sounds?.playCrateBreak();
     crateObj.destroy();
     this.crates = this.crates.filter(c => c !== crateObj);
     this.props = this.props.filter(p => p !== crateObj);
@@ -1316,6 +1320,9 @@ export default class PlaygroundScene extends Phaser.Scene {
 
   update(time, delta) {
     this.elephant.update(time, delta, this.props);
+    const el = this.elephant;
+    const isMoving = Math.abs(el.sprite.body.velocity.x) > 1;
+    this.sounds?.tickFootsteps(delta, el.groundContacts > 0, isMoving);
     this.updateIndicatorArrows();
     this.updateClouds(delta);
     this.updateBirds(delta);

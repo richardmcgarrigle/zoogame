@@ -190,6 +190,7 @@ export default class Elephant {
 
       // --- Landing stomp ---
       if (isGrounded && !this.wasGrounded && previousVelocityY > STOMP_FALL_THRESHOLD) {
+        this.scene.sounds?.playLand();
         this.scene.cameras.main.shake(140, 0.006);
         this.scene.tweens.add({
           targets: this.sprite,
