@@ -215,9 +215,9 @@ export default class PlaygroundScene extends Phaser.Scene {
           if (otherBody === walls.left || otherBody === walls.right) {
             this.bounceFruitOffWall(fruitBody, otherBody === walls.left ? 1 : -1);
           }
-          // Play bounce sound on any fruit impact (ground, wall, crate, elephant, etc.)
-          const speed = Math.hypot(fruitBody.velocity.x, fruitBody.velocity.y);
-          this.sounds?.playBounce(speed);
+          // Only play on real impacts — rolling has near-zero vy, bouncing doesn't.
+          const vy = Math.abs(fruitBody.velocity.y);
+          if (vy > 2) this.sounds?.playBounce(vy);
         }
       }
     });
