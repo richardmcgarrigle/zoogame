@@ -72,6 +72,9 @@ const FRUIT_LAUNCH_SPEED_MAX = 12;
 const FRUIT_LAUNCH_SPIN = 0.6;
 const WALL_BOUNCE_MIN_SPEED = 4;
 
+const FRUIT_IDLE_SPEED_THRESHOLD = 0.8; // px/frame — below this counts as stuck
+const FRUIT_IDLE_RESPAWN_DELAY = 10;    // seconds before auto-respawn
+
 // Fruit types available for random spawning. Melon is rarer and heavier.
 const FRUIT_CONFIGS = {
   orange: { key: 'orange', density: 0.0006, arrowTint: 0xff8c3c },
@@ -168,6 +171,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       this.cameras.main.setSize(gameSize.width, gameSize.height);
       this.cameras.main.scrollY = WORLD_HEIGHT - gameSize.height;
       this.scoreText.setX(gameSize.width - 12);
+      this.fruitIdleText.setX(gameSize.width / 2);
     });
 
     this.add
@@ -194,6 +198,20 @@ export default class PlaygroundScene extends Phaser.Scene {
       .setDepth(100);
 
     this.input.keyboard.on('keydown-R', () => this.restartLevel());
+
+    this.fruitIdleTime = 0;
+    this.fruitIdleText = this.add
+      .text(this.scale.width / 2, 56, '', {
+        fontFamily: 'monospace',
+        fontSize: '18px',
+        color: '#ff4422',
+        backgroundColor: '#ffffffcc',
+        padding: { x: 10, y: 5 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setVisible(false);
 
     this.matter.world.on('collisionstart', (event) => {
       const walls = this.matter.world.walls;
@@ -1320,10 +1338,67 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
   }
 
+  updateFruitIdleTimer(delta) {
+    if (!this.fruit?.body) {
+      this.fruitIdleTime = 0;
+      this.fruitIdleText?.setVisible(false);
+      return;
+    }
+
+    const { x: vx, y: vy } = this.fruit.body.velocity;
+    const speed = Math.sqrt(vx * vx + vy * vy);
+
+    if (speed < FRUIT_IDLE_SPEED_THRESHOLD) {
+      this.fruitIdleTime += delta * 0.001;
+    } else {
+      this.fruitIdleTime = 0;
+      this.fruitIdleText.setVisible(false);
+      return;
+    }
+
+    const remaining = Math.max(0, FRUIT_IDLE_RESPAWN_DELAY - this.fruitIdleTime);
+
+    if (remaining <= 5) {
+      this.fruitIdleText
+        .setText(`Ball stuck — respawning in ${Math.ceil(remaining)}s`)
+        .setVisible(true);
+    } else {
+      this.fruitIdleText.setVisible(false);
+    }
+
+    if (this.fruitIdleTime >= FRUIT_IDLE_RESPAWN_DELAY) {
+      this.fruitIdleTime = 0;
+      this.fruitIdleText.setVisible(false);
+      this.respawnFruit();
+    }
+  }
+
+  respawnFruit() {
+    const prevType = this.fruit?.fruitType ?? 'orange';
+    if (this.fruit) {
+      this.props = this.props.filter(p => p !== this.fruit);
+      this.fruit.destroy();
+      this.fruit = null;
+    }
+
+    const spawnX = Phaser.Math.Between(FRUIT_RESPAWN_X_MIN, this.worldWidth - FRUIT_RESPAWN_X_MARGIN);
+    const type = Phaser.Utils.Array.GetRandom(FRUIT_POOL);
+    this.fruit = this.addFruit(spawnX, -100, type);
+    this.fruitArrow.setTint(FRUIT_CONFIGS[type].arrowTint);
+
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Phaser.Math.FloatBetween(FRUIT_LAUNCH_SPEED_MIN, FRUIT_LAUNCH_SPEED_MAX);
+    this.matter.body.setVelocity(this.fruit.body, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed });
+    this.matter.body.setAngularVelocity(this.fruit.body, (Math.random() - 0.5) * 2 * FRUIT_LAUNCH_SPIN);
+
+    this.props.push(this.fruit);
+  }
+
   update(time, delta) {
     this.elephant.update(time, delta, this.props);
     this.updateIndicatorArrows();
     this.updateClouds(delta);
     this.updateBirds(delta);
+    this.updateFruitIdleTimer(delta);
   }
 }
