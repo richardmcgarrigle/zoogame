@@ -169,7 +169,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     });
 
     this.add
-      .text(12, 12, 'Move: Arrows/AD  Jump: Up/W  Dash: Space/Square (hold)  Glide: Shift (hold in air)  Swat: X  Restart: R', {
+      .text(12, 12, 'Move: Arrows/AD  Jump: Up/W  Dash: Space/Square (hold)  Glide: Shift (hold in air, drifts forward)  Swat: X (+ remote blast)  Restart: R', {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#1a1a1a',
