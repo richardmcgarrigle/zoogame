@@ -124,63 +124,6 @@ export default class SoundManager {
     noise.stop(t + duration);
   }
 
-  // Crowd cheer — layered bandpass noise bands with a slow amplitude swell.
-  playGoalHorn() {
-    const ctx = this.ctx;
-    const t = ctx.currentTime;
-    const duration = 3.0;
-
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0, t);
-    masterGain.gain.linearRampToValueAtTime(0.7, t + 0.35);
-    masterGain.gain.setValueAtTime(0.7, t + duration - 0.6);
-    masterGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-    masterGain.connect(ctx.destination);
-
-    // Slow LFO wobble — simulates the natural ebb of a crowd.
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.frequency.value = 3.5;
-    lfoGain.gain.value = 0.12;
-    lfo.connect(lfoGain);
-    lfoGain.connect(masterGain.gain);
-    lfo.start(t);
-    lfo.stop(t + duration);
-
-    // Several bandpass noise layers — low rumble, mid voices, upper brightness.
-    const bands = [
-      { freq: 280,  Q: 1.2, vol: 0.9 },
-      { freq: 600,  Q: 1.5, vol: 1.0 },
-      { freq: 1100, Q: 2.0, vol: 0.7 },
-      { freq: 2200, Q: 2.5, vol: 0.4 },
-    ];
-
-    const bufSize = Math.ceil(ctx.sampleRate * duration);
-    const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
-
-    for (const band of bands) {
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = band.freq;
-      bp.Q.value = band.Q;
-
-      const bandGain = ctx.createGain();
-      bandGain.gain.value = band.vol;
-
-      source.connect(bp);
-      bp.connect(bandGain);
-      bandGain.connect(masterGain);
-
-      source.start(t);
-      source.stop(t + duration);
-    }
-  }
-
   // Short "land" thud — heavier than a footstep.
   playLand() {
     const ctx = this.ctx;
