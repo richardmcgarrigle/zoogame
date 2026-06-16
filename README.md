@@ -1,4 +1,4 @@
-# Project Canopy
+# Project Canopy 
 
 A cozy 2D physics sandbox where you play as a chunky elephant kicking fruit into a goal across a procedurally generated jungle world.
 
