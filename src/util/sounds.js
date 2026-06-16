@@ -50,11 +50,11 @@ export default class SoundManager {
     }
   }
 
-  // Descending sine chirp — fruit bounces off a platform.
+  // Spring boing — pitch rises sharply then falls slowly, like a cartoon spring.
   playBounce(velocityMagnitude = 5) {
     const ctx = this.ctx;
     const t = ctx.currentTime;
-    const vol = Math.min(velocityMagnitude / 12, 1) * 0.5;
+    const vol = Math.min(velocityMagnitude / 12, 1) * 0.55;
     if (vol < 0.05) return;
 
     const osc = ctx.createOscillator();
@@ -63,14 +63,16 @@ export default class SoundManager {
     gain.connect(ctx.destination);
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(420, t);
-    osc.frequency.exponentialRampToValueAtTime(110, t + 0.18);
+    // Quick rise (impact), then slow fall (spring releasing) — that's the boing shape.
+    osc.frequency.setValueAtTime(130, t);
+    osc.frequency.exponentialRampToValueAtTime(520, t + 0.04);
+    osc.frequency.exponentialRampToValueAtTime(90, t + 0.38);
 
     gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
 
     osc.start(t);
-    osc.stop(t + 0.2);
+    osc.stop(t + 0.4);
   }
 
   // Heavy wooden crate smash: bass thud + mid-frequency wood crack.
