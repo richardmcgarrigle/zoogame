@@ -215,6 +215,9 @@ export default class PlaygroundScene extends Phaser.Scene {
           if (otherBody === walls.left || otherBody === walls.right) {
             this.bounceFruitOffWall(fruitBody, otherBody === walls.left ? 1 : -1);
           }
+          // Play bounce sound on any fruit impact (ground, wall, crate, elephant, etc.)
+          const speed = Math.hypot(fruitBody.velocity.x, fruitBody.velocity.y);
+          this.sounds?.playBounce(speed);
         }
       }
     });
@@ -254,7 +257,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     // the surface. Amplify that rebound so platforms feel springy.
     // vy < 0 = moving upward (bounced off top); vy > 0 = bounced off underside.
     if (Math.abs(vy) < 0.5) return;
-    this.sounds?.playBounce(Math.abs(vy));
     const BOOST = 1.5;
     const MIN_BOUNCE = 5;
     const boosted = Math.sign(vy) * Math.max(Math.abs(vy) * BOOST, MIN_BOUNCE);
