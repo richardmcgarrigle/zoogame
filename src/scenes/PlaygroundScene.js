@@ -277,6 +277,7 @@ export default class PlaygroundScene extends Phaser.Scene {
 
     this.score += 1;
     this.scoreText.setText(`Score: ${this.score}`);
+    this.sounds?.playGoalHorn();
 
     // Flash the score text
     let flashes = 0;
