@@ -602,7 +602,10 @@ export default class PlaygroundScene extends Phaser.Scene {
 
     const refBounds = this.getPlatformBounds(0, 0, scale, angle);
     const rotatedHalfH = (refBounds.maxY - refBounds.minY) / 2;
-    const effectiveMaxY = GROUND_SURFACE_Y - ELEPHANT_CLEARANCE - rotatedHalfH;
+    // Use the actual terrain height at the anchor so platforms on slopes still
+    // leave enough clearance for the elephant to pass underneath.
+    const terrainAtAnchor = this.getTerrainYAt(anchorX);
+    const effectiveMaxY = terrainAtAnchor - ELEPHANT_CLEARANCE - rotatedHalfH;
 
     // Constrain to world edges only; mini-chunk boundaries are just anchor hints.
     const minX = PLATFORM_MARGIN_X;
