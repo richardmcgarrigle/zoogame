@@ -145,18 +145,23 @@ export default class Elephant {
     const stickX = (p) => p.leftStick?.x ?? p.axes?.[0] ?? 0;
 
     if (!isFrozen) {
+      const touch = this.scene.touchControls;
       const left = this.cursors.left.isDown || this.keys.A.isDown ||
-        pads.some(p => padPressed(p, 14) || stickX(p) < -STICK_DEAD);
+        pads.some(p => padPressed(p, 14) || stickX(p) < -STICK_DEAD) ||
+        (touch?.left ?? false);
       const right = this.cursors.right.isDown || this.keys.D.isDown ||
-        pads.some(p => padPressed(p, 15) || stickX(p) > STICK_DEAD);
+        pads.some(p => padPressed(p, 15) || stickX(p) > STICK_DEAD) ||
+        (touch?.right ?? false);
       const jumpPressed =
         Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
         Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
         Phaser.Input.Keyboard.JustDown(this.keys.W) ||
-        pads.some(p => padJustDown(p, 0) || padJustDown(p, 12));
+        pads.some(p => padJustDown(p, 0) || padJustDown(p, 12)) ||
+        (touch?.jumpJustPressed ?? false);
       const dashHeld =
         this.cursors.shift?.isDown ||
-        pads.some(p => padPressed(p, 2));
+        pads.some(p => padPressed(p, 2)) ||
+        (touch?.dashHeld ?? false);
 
       // --- Dash (hold to sustain) ---
       this.isDashing = dashHeld;

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { generatePlaceholderTextures, TEXTURE_SIZES } from '../util/textures.js';
 import Elephant from '../objects/Elephant.js';
+import TouchControls from '../objects/TouchControls.js';
 import SoundManager from '../util/sounds.js';
 import elephantCelebUrl  from '../assets/elephant_celebrate.png';
 import elephantIdleUrl    from '../assets/elephant_idle_1.png';
@@ -153,6 +154,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.props = [this.fruit, initialCrate];
 
     this.elephant = new Elephant(this, 180, 800);
+    this.touchControls = new TouchControls(this);
     this.sounds = new SoundManager(this.sound.context);
 
     // Allow negative scrollY so the floor sits at the window bottom even
@@ -1396,6 +1398,7 @@ export default class PlaygroundScene extends Phaser.Scene {
 
   update(time, delta) {
     this.elephant.update(time, delta, this.props);
+    this.touchControls.postUpdate();
     this.updateIndicatorArrows();
     this.updateClouds(delta);
     this.updateBirds(delta);
