@@ -1406,5 +1406,16 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.updateClouds(delta);
     this.updateBirds(delta);
     this.updateFruitIdleTimer(delta);
+    this.enforceFruitBounds();
+  }
+
+  enforceFruitBounds() {
+    if (!this.fruit?.body) return;
+    const margin = 200;
+    const x = this.fruit.x;
+    const y = this.fruit.y;
+    if (x < -margin || x > this.worldWidth + margin || y > WORLD_HEIGHT + margin) {
+      this.respawnFruit();
+    }
   }
 }
