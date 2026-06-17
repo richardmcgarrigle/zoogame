@@ -238,21 +238,8 @@ export default class TouchControls {
 
     if (pointer.id === this._stickPointerId) {
       this._updateStick(pointer.x, pointer.y);
-      return;
     }
-
-    // Button slide handling.
-    const prev = this._pointerMap[pointer.id];
-    const curr = this._hitTestBtn(pointer.x, pointer.y);
-    if (prev !== curr) {
-      this._release(prev);
-      if (curr) {
-        this._pointerMap[pointer.id] = curr;
-        this._press(curr);
-      } else {
-        delete this._pointerMap[pointer.id];
-      }
-    }
+    // Buttons are sticky once pressed — only released on pointerup.
   }
 
   _onUp(pointer) {

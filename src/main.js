@@ -12,6 +12,7 @@ new Phaser.Game({
   },
   input: {
     gamepad: true,
+    activePointers: 4,
   },
   physics: {
     default: 'matter',
