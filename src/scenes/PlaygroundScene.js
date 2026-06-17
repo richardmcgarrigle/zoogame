@@ -21,8 +21,8 @@ const GROUND_DEPTH = GROUND_HEIGHT + 60;
 const TERRAIN_SEGMENT_WIDTH = 60;
 
 const WIDTH_PER_SCORE = 300;
-const AMPLITUDE_PER_SCORE = 12;
-const MAX_TERRAIN_AMPLITUDE = 100;
+const AMPLITUDE_PER_SCORE = 15;
+const MAX_TERRAIN_AMPLITUDE = 180;
 
 const PLATFORM_MIN_SCALE = 0.6;
 const PLATFORM_MAX_SCALE = 1.4;
@@ -488,20 +488,20 @@ export default class PlaygroundScene extends Phaser.Scene {
     // across chunk boundaries.
     if (!this.terrainWaveState) {
       this.terrainWaveState = {
-        wavelength1: 2200 + Math.random() * 1400,
-        wavelength2: 1000 + Math.random() * 500,
+        wavelength1: 700 + Math.random() * 700,
+        wavelength2: 350 + Math.random() * 250,
         phase1: Math.random() * Math.PI * 2,
         phase2: Math.random() * Math.PI * 2,
         amp1Factor: 0.75 + Math.random() * 0.25,
-        amp2Factor: 0.15 * Math.random(),
+        amp2Factor: 0.25 + Math.random() * 0.15,
       };
     } else {
       const ws = this.terrainWaveState;
       // 25% blend toward a new random target each chunk — gradual evolution.
-      ws.wavelength1 = ws.wavelength1 * 0.75 + (1800 + Math.random() * 1800) * 0.25;
-      ws.wavelength2 = ws.wavelength2 * 0.75 + (900  + Math.random() * 600)  * 0.25;
+      ws.wavelength1 = ws.wavelength1 * 0.75 + (700  + Math.random() * 700)  * 0.25;
+      ws.wavelength2 = ws.wavelength2 * 0.75 + (350  + Math.random() * 250)  * 0.25;
       ws.amp1Factor  = ws.amp1Factor  * 0.80 + (0.75 + Math.random() * 0.25) * 0.20;
-      ws.amp2Factor  = ws.amp2Factor  * 0.80 + (0.15 * Math.random())        * 0.20;
+      ws.amp2Factor  = ws.amp2Factor  * 0.80 + (0.25 + Math.random() * 0.15) * 0.20;
       // Phases are intentionally left unchanged — see note above.
     }
 
