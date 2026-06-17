@@ -107,7 +107,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#87ceeb');
 
     // Sky gradient: deep blue at top fading to warm sunny yellow-white at horizon.
-    const skyGfx = this.add.graphics().setScrollFactor(0).setDepth(-1);
+    const skyGfx = this.add.graphics().setScrollFactor(0).setDepth(-2);
     const skyStops = [
       { y: 0,    color: 0x3a8fd4 },
       { y: 0.45, color: 0x6dbde8 },
@@ -1101,7 +1101,7 @@ export default class PlaygroundScene extends Phaser.Scene {
         .setScrollFactor(0)
         .setScale(sp.scale)
         .setAlpha(0.82)
-        .setDepth(0);
+        .setDepth(-1);
       cloud._speed = sp.speed;
       this.clouds.push(cloud);
     }
