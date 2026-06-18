@@ -6,6 +6,7 @@ import SoundManager from '../util/sounds.js';
 import TerrainManager from '../managers/TerrainManager.js';
 import PlatformSpawner from '../managers/PlatformSpawner.js';
 import FruitManager, { FRUIT_CONFIGS } from '../managers/FruitManager.js';
+import CollisionHandler from '../managers/CollisionHandler.js';
 import {
   WORLD_HEIGHT,
   AMPLITUDE_PER_SCORE,
@@ -187,32 +188,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       .setDepth(100)
       .setVisible(false);
 
-    this.matter.world.on('collisionstart', (event) => {
-      const walls = this.matter.world.walls;
-      for (const pair of event.pairs) {
-        const { bodyA, bodyB } = pair;
-        const labels = [bodyA.label, bodyB.label];
-        if (labels.includes('fruit') && labels.includes('goal')) {
-          this.onGoalScored();
-        }
-
-        if (labels.includes('fruit') && labels.includes('platform')) {
-          const fruitBody = bodyA.label === 'fruit' ? bodyA : bodyB;
-          this.bounceFruitOffPlatform(fruitBody);
-        }
-
-        if (bodyA.label === 'fruit' || bodyB.label === 'fruit') {
-          const fruitBody = bodyA.label === 'fruit' ? bodyA : bodyB;
-          const otherBody = fruitBody === bodyA ? bodyB : bodyA;
-          if (otherBody === walls.left || otherBody === walls.right) {
-            this.bounceFruitOffWall(fruitBody, otherBody === walls.left ? 1 : -1);
-          }
-          // Only play on real impacts — rolling has near-zero vy, bouncing doesn't.
-          const vy = Math.abs(fruitBody.velocity.y);
-          if (vy > 2) this.sounds?.playBounce(vy);
-        }
-      }
-    });
+    this.collisionHandler = new CollisionHandler(this);
   }
 
   restartLevel() {
