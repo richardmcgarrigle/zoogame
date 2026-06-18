@@ -71,7 +71,18 @@ export default class TouchControls {
     scene.input.on('pointerupoutside', this._onUp,   this);
   }
 
-  /** Call at the END of Elephant.update — clears one-frame flags. */
+  /**
+   * Returns true if jump was just pressed this frame, then clears the flag.
+   * Prefer this over reading jumpJustPressed directly — it makes the consume
+   * contract impossible to forget (the flag clears itself on read).
+   */
+  consumeJump() {
+    const v = this.jumpJustPressed;
+    this.jumpJustPressed = false;
+    return v;
+  }
+
+  /** @deprecated Use consumeJump() instead. */
   postUpdate() {
     this.jumpJustPressed = false;
   }

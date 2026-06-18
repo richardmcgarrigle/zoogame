@@ -18,6 +18,12 @@ const WIND_STREAK_SPEED = 280;
 const WIND_STREAK_LEN_MIN = 35;
 const WIND_STREAK_LEN_MAX = 100;
 
+// Gamepad analogue stick dead zone — normalised (0–1). Below this displacement
+// the stick is ignored to avoid drift from centring imprecision.
+// Note: TouchControls uses a separate pixel-based dead zone (STICK_DEAD_ZONE)
+// for its on-screen stick, which measures physical displacement in screen px.
+const GAMEPAD_STICK_DEAD = 0.2;
+
 // Lerp coefficient for smoothly matching sprite rotation to surface angle.
 // Lower = smoother/slower tilt; higher = snappier response.
 const SURFACE_ANGLE_LERP = 0.18;
@@ -135,7 +141,6 @@ export default class Elephant {
   update(time, delta, props) {
     const body = this.sprite.body;
 
-    const STICK_DEAD = 0.2;
     const allPads = (this.scene.input.gamepad?.gamepads ?? []).filter(Boolean);
 
     const isFrozen = this.celebrateTimer > 0;
@@ -165,17 +170,17 @@ export default class Elephant {
     if (!isFrozen) {
       const touch = this.scene.touchControls;
       const left = this.cursors.left.isDown || this.keys.A.isDown ||
-        pads.some(p => padPressed(p, PAD_BTN_D_LEFT) || stickX(p) < -STICK_DEAD) ||
+        pads.some(p => padPressed(p, PAD_BTN_D_LEFT) || stickX(p) < -GAMEPAD_STICK_DEAD) ||
         (touch?.left ?? false);
       const right = this.cursors.right.isDown || this.keys.D.isDown ||
-        pads.some(p => padPressed(p, PAD_BTN_D_RIGHT) || stickX(p) > STICK_DEAD) ||
+        pads.some(p => padPressed(p, PAD_BTN_D_RIGHT) || stickX(p) > GAMEPAD_STICK_DEAD) ||
         (touch?.right ?? false);
       const jumpPressed =
         Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
         Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
         Phaser.Input.Keyboard.JustDown(this.keys.W) ||
         pads.some(p => padJustDown(p, PAD_BTN_CROSS) || padJustDown(p, PAD_BTN_D_UP)) ||
-        (touch?.jumpJustPressed ?? false);
+        (touch?.consumeJump() ?? false);
       const dashHeld =
         this.cursors.shift?.isDown ||
         pads.some(p => padPressed(p, PAD_BTN_SQUARE)) ||

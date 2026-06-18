@@ -380,7 +380,7 @@ export default class PlaygroundScene extends Phaser.Scene {
 
   update(time, delta) {
     this.elephant.update(time, delta, this.props);
-    this.touchControls.postUpdate();
+
     this.ui.updateIndicatorArrows();
     this.decorations.updateClouds(delta);
     this.decorations.updateBirds(delta);
