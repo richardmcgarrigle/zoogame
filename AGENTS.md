@@ -22,10 +22,13 @@ This document is written for AI agents working on this codebase. It describes th
 src/
 ├── main.js                        Entry point. Phaser Game config only.
 ├── scenes/
-│   └── PlaygroundScene.js         The only scene. All world state lives here.
+│   └── PlaygroundScene.js         The only scene. Orchestrates managers and world objects.
+├── managers/
+│   └── TerrainManager.js          Terrain: height generation, physics bodies, graphics, queries.
 ├── objects/
 │   └── Elephant.js                Player controller. Input + physics + animation.
 └── util/
+    ├── constants.js               Shared constants (world dimensions, terrain params, etc.).
     └── textures.js                Runtime texture generation. No external image I/O.
 
 src/assets/                        Pixel-art PNGs for the elephant sprite frames.
@@ -70,19 +73,51 @@ Exports:
 
 ---
 
+### `src/util/constants.js`
+
+Shared constants imported by both `PlaygroundScene` and `TerrainManager`. Includes:
+- World dimensions: `WORLD_HEIGHT`, `GROUND_HEIGHT`, `GROUND_SURFACE_Y`, `GROUND_DEPTH`
+- Terrain params: `TERRAIN_SEGMENT_WIDTH`, `TERRAIN_SLIDE_DURATION`, `AMPLITUDE_PER_SCORE`, `MAX_TERRAIN_AMPLITUDE`
+- Visual: `OUTLINE`, `OUTLINE_WIDTH`
+
+Constants specific to a single module remain in that module.
+
+---
+
+### `src/managers/TerrainManager.js`
+
+Owns all terrain state and operations. Instantiated by `PlaygroundScene` as `this.terrain`.
+
+**Public API:**
+- `buildGround()` — full rebuild; destroys old bodies and graphics, generates new profile.
+- `extendTerrain(prevWidth, newWidth)` — appends terrain for a new world chunk; returns the slide tween.
+- `generateTerrainHeights()` — produces `{x,y}[]` for the full world width.
+- `generateChunkTerrainHeights(startX, endX, startY)` — produces `{x,y}[]` for one chunk.
+- `drawGroundGraphicsSegment(points)` — draws and returns a `Phaser.Graphics` object.
+- `getTerrainYAt(x)` — linear interpolation over `terrainPoints`; answers ground y at x.
+- `minTerrainYInRange(minX, maxX)` — returns the highest ground point in a range.
+
+**State fields:**
+- `terrainPoints` — `{x,y}[]` sampled profile
+- `groundBodies` — Matter static rectangle bodies
+- `groundGraphicsObjects` — `Phaser.Graphics[]`
+- `terrainWaveState` — dual-sine wave params; `null` after a full rebuild
+- `terrainAmplitude` — current max amplitude; set by `PlaygroundScene` before building
+
+Access terrain from the scene via `this.terrain.<method>()`.
+
+---
+
 ### `src/scenes/PlaygroundScene.js`
 
-The scene owns all world state. Everything except elephant input/physics lives here.
+Orchestrates managers and world objects. Terrain operations are delegated to `this.terrain` (a `TerrainManager`).
 
 #### Instance fields (set in `create()`)
 
 | Field | Type | Description |
 |---|---|---|
 | `this.worldWidth` | number | Current scrollable world width in pixels |
-| `this.terrainAmplitude` | number | Max terrain height deviation; increases with score |
-| `this.terrainPoints` | `{x,y}[]` | Sampled ground profile for this round |
-| `this.groundBodies` | Matter body[] | Static rectangle bodies making up the ground |
-| `this.groundGraphics` | Phaser.Graphics | Visual fill for the ground; destroyed/recreated each round |
+| `this.terrain` | TerrainManager | Terrain state and operations |
 | `this.platforms` | Phaser.Matter.Image[] | Elevated leaf platforms; destroyed/rebuilt each round |
 | `this.palmTrees` | Phaser.Image[] | Background decoration; rebuilt after platforms |
 | `this.goal` | Phaser.Matter.Image | Static sensor body at world right edge |
@@ -236,24 +271,30 @@ During an active dash, normal horizontal movement is suppressed and `setVelocity
 
 ## Constants Quick Reference
 
-### `PlaygroundScene.js`
+### `src/util/constants.js` (shared)
 
 | Constant | Value | Meaning |
 |---|---|---|
 | `WORLD_HEIGHT` | 1000 | Fixed world height in pixels |
 | `GROUND_HEIGHT` | 90 | Visual ground fill height |
 | `GROUND_SURFACE_Y` | 910 | Y of the terrain surface baseline |
+| `GROUND_DEPTH` | 150 | Thickness of ground physics bodies |
 | `TERRAIN_SEGMENT_WIDTH` | 60 | Pixels per terrain segment |
+| `AMPLITUDE_PER_SCORE` | 15 | Terrain amplitude added per goal |
+| `MAX_TERRAIN_AMPLITUDE` | 180 | Terrain amplitude cap |
+| `TERRAIN_SLIDE_DURATION` | 700 | ms for new terrain chunk slide-up animation |
+| `OUTLINE` | 0x1a1a1a | Ground outline colour |
+| `OUTLINE_WIDTH` | 6 | Ground outline stroke width |
+
+### `PlaygroundScene.js` (scene-specific)
+
+| Constant | Value | Meaning |
+|---|---|---|
 | `WIDTH_PER_SCORE` | 300 | Extra world width per goal |
-| `AMPLITUDE_PER_SCORE` | 12 | Terrain amplitude added per goal |
-| `MAX_TERRAIN_AMPLITUDE` | 100 | Terrain amplitude cap |
-| `PLATFORM_BASE_COUNT` | 3 | Platforms at score 0 |
-| `PLATFORM_PER_SCORE` | 0.5 | Extra platforms per goal |
-| `PLATFORM_MAX_COUNT` | 10 | Platform count cap |
 | `ELEPHANT_CLEARANCE` | 110 | Min vertical gap below any platform |
 | `PLATFORM_GAP_X_MAX` | 220 | Max horizontal gap between chained platforms |
 | `PLATFORM_GAP_Y_MAX` | 140 | Max vertical gap between chained platforms |
-| `FRUIT_RESPAWN_DELAY` | 700 | ms before new fruit spawns after a goal |
+| `FRUIT_RESPAWN_DELAY` | 1700 | ms before new fruit spawns after a goal |
 
 ### `Elephant.js`
 
@@ -279,7 +320,7 @@ During an active dash, normal horizontal movement is suppressed and `setVelocity
 
 **World rebuild order:** Never call `buildPlatforms()` before `repositionGoal()`. The goal's AABB must be in `placedBounds` before the platform loop starts.
 
-**Terrain must exist before everything else:** `buildGround()` populates `this.terrainPoints`. Any call to `getTerrainYAt()` before that will throw (array is undefined). Maintain the build order documented above.
+**Terrain must exist before everything else:** `this.terrain.buildGround()` populates `this.terrain.terrainPoints`. Any call to `this.terrain.getTerrainYAt()` before that will throw (array is undefined). Maintain the build order documented above.
 
 **Camera bounds must use negative Y:** If you tighten `setBounds` to start at Y=0, the camera will clamp `scrollY` to 0 on tall displays, visually lifting the floor off the window bottom.
 
@@ -287,7 +328,7 @@ During an active dash, normal horizontal movement is suppressed and `setVelocity
 
 **Changing terrain amplitude at score 0:** `terrainAmplitude` starts at 0. Score-0 terrain is flat by design. Do not initialise it to a non-zero value unless you want the very first level to have hills.
 
-**Palm trees call `getTerrainYAt()` and `getPlatformBounds()`:** Both require `this.terrainPoints` (set by `buildGround`) and `this.platforms` (set by `buildPlatforms`). `buildPalms()` must always be last in the build sequence.
+**Palm trees call `this.terrain.getTerrainYAt()` and `getPlatformBounds()`:** Both require terrain points (set by `this.terrain.buildGround()`) and `this.platforms` (set by `buildPlatforms`). `buildPalms()` must always be last in the build sequence.
 
 ---
 
