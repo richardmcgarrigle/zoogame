@@ -56,7 +56,7 @@ function makeRestartScene(score = 5) {
     terrain,
     platformSpawner,
     repositionGoal: vi.fn(),
-    buildPalms: vi.fn(),
+    decorations: { buildPalms: vi.fn() },
     addCrate: vi.fn(() => ({
       body: { label: 'crate' },
       destroy: vi.fn(),
