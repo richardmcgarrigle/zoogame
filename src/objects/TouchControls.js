@@ -1,10 +1,10 @@
 /**
  * On-screen touch controls for mobile/tablet play.
  *
- * Left half of screen — dynamic analog stick:
- *   Appears where the user first touches. The thumb follows the finger and is
- *   clamped to a max radius. Horizontal displacement past a dead zone sets
- *   .left / .right.
+ * Anywhere on screen — dynamic analog stick:
+ *   Appears where the user first touches or clicks (outside the buttons). The
+ *   thumb follows the pointer and is clamped to a max radius. Horizontal
+ *   displacement past a dead zone sets .left / .right.
  *
  * Bottom-right corner — fixed jump & dash buttons.
  *
@@ -237,8 +237,8 @@ export default class TouchControls {
       return;
     }
 
-    // Left half → analog stick (one stick at a time).
-    if (this._isLeftSide(pointer.x) && this._stickPointerId === null) {
+    // Anywhere on screen → analog stick (one stick at a time).
+    if (this._stickPointerId === null) {
       this._stickPointerId = pointer.id;
       this._startStick(pointer.x, pointer.y);
     }

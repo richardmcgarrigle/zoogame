@@ -340,7 +340,7 @@
 ## Feature: Touch Controls
 
 **Scenario: Analog stick appears at touch origin**
-- Given the player touches the left half of the screen
+- Given the player touches or clicks anywhere on the screen (that is not a button)
 - Then an analog stick base and thumb appear at the touch point
 
 **Scenario: Analog stick controls movement**
