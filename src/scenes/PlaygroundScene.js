@@ -5,6 +5,7 @@ import TouchControls from '../objects/TouchControls.js';
 import SoundManager from '../util/sounds.js';
 import TerrainManager from '../managers/TerrainManager.js';
 import PlatformSpawner from '../managers/PlatformSpawner.js';
+import FruitManager, { FRUIT_CONFIGS } from '../managers/FruitManager.js';
 import {
   WORLD_HEIGHT,
   AMPLITUDE_PER_SCORE,
@@ -28,15 +29,7 @@ const WIDTH_PER_SCORE = 300;
 const FRUIT_SPAWN_X = 620;
 const FRUIT_SPAWN_Y = 850;
 const FRUIT_RESPAWN_DELAY = 1700;
-const FRUIT_RESPAWN_X_MIN = 150;
-const FRUIT_RESPAWN_X_MARGIN = 150;
-const FRUIT_LAUNCH_SPEED_MIN = 4;
-const FRUIT_LAUNCH_SPEED_MAX = 12;
-const FRUIT_LAUNCH_SPIN = 0.6;
 const WALL_BOUNCE_MIN_SPEED = 4;
-
-const FRUIT_IDLE_SPEED_THRESHOLD = 0.8; // px/frame — below this counts as stuck
-const FRUIT_IDLE_RESPAWN_DELAY = 10;    // seconds before auto-respawn
 
 // Goal animation
 const GOAL_FLASH_INTERVAL = 120;    // ms between score text flash toggles
@@ -54,17 +47,17 @@ const PALM_MIN_GAP = 300;     // minimum x distance between any two trees
 // Bird animation
 const BIRD_FLAP_INTERVAL = 180; // ms per frame
 
-// Fruit types available for random spawning. Melon is rarer and heavier.
-const FRUIT_CONFIGS = {
-  orange: { key: 'orange', density: 0.0006, arrowTint: 0xff8c3c },
-  apple:  { key: 'apple',  density: 0.0006, arrowTint: 0xd42b22 },
-  melon:  { key: 'melon',  density: 0.0010, arrowTint: 0x5cb82e },
-};
-const FRUIT_POOL = ['orange', 'orange', 'apple', 'apple', 'melon'];
-
 export default class PlaygroundScene extends Phaser.Scene {
   constructor() {
     super('PlaygroundScene');
+  }
+
+  get fruit() {
+    return this.fruitManager ? this.fruitManager.fruit : null;
+  }
+
+  set fruit(value) {
+    if (this.fruitManager) this.fruitManager.fruit = value;
   }
 
   preload() {
@@ -126,11 +119,12 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.platformSpawner.buildPlatforms();
     this.buildPalms();
 
-    this.fruit = this.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y);
+    this.fruitManager = new FruitManager(this);
+    this.fruitManager.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y);
     this.crates = [];
     const initialCrate = this.addCrate(950, 850);
     this.crates.push(initialCrate);
-    this.props = [this.fruit, initialCrate];
+    this.props = [this.fruitManager.fruit, initialCrate];
 
     this.elephant = new Elephant(this, 180, 800);
     this.touchControls = new TouchControls(this);
@@ -180,7 +174,6 @@ export default class PlaygroundScene extends Phaser.Scene {
 
     this.input.keyboard.on('keydown-R', () => this.restartLevel());
 
-    this.fruitIdleTime = 0;
     this.fruitIdleText = this.add
       .text(this.scale.width / 2, 56, '', {
         fontFamily: 'monospace',
@@ -229,9 +222,10 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.buildPalms();
 
     // Respawn props above the new terrain.
-    if (this.fruit) this.fruit.destroy();
-    const restartType = this.fruit?.fruitType ?? 'orange';
-    this.fruit = this.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y, restartType);
+    const restartType = this.fruitManager.fruit?.fruitType ?? 'orange';
+    if (this.fruitManager.fruit) this.fruitManager.fruit.destroy();
+    this.fruitManager.fruit = null;
+    this.fruitManager.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y, restartType);
     this.fruitArrow.setTint(FRUIT_CONFIGS[restartType].arrowTint);
     this.crates.forEach(c => c?.destroy());
     this.crates = [];
@@ -239,7 +233,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     const crateY = Math.min(850, this.terrain.getTerrainYAt(crateX) - TEXTURE_SIZES.crate.height / 2 - 1);
     const restartCrate = this.addCrate(crateX, crateY);
     this.crates.push(restartCrate);
-    this.props = [this.fruit, restartCrate];
+    this.props = [this.fruitManager.fruit, restartCrate];
 
     // Reset elephant position and physics state above the new terrain.
     const spawnX = 180;
@@ -282,7 +276,7 @@ export default class PlaygroundScene extends Phaser.Scene {
   }
 
   onGoalScored() {
-    if (!this.fruit || !this.fruit.body) return;
+    if (!this.fruitManager?.fruit || !this.fruitManager.fruit.body) return;
 
     this.score += 1;
     this.scoreText.setText(`Score: ${this.score}`);
@@ -341,27 +335,17 @@ export default class PlaygroundScene extends Phaser.Scene {
       },
     });
 
-    this.celebrateGoal(this.fruit.x, this.fruit.y);
+    this.celebrateGoal(this.fruitManager.fruit.x, this.fruitManager.fruit.y);
 
     // Extend the world to the right; old terrain and platforms remain in place.
     this.extendWorld();
 
-    this.props = this.props.filter((prop) => prop !== this.fruit);
-    this.fruit.destroy();
-    this.fruit = null;
+    this.props = this.props.filter((prop) => prop !== this.fruitManager.fruit);
+    this.fruitManager.fruit.destroy();
+    this.fruitManager.fruit = null;
 
     this.time.delayedCall(FRUIT_RESPAWN_DELAY, () => {
-      const spawnX = Phaser.Math.Between(FRUIT_RESPAWN_X_MIN, this.worldWidth - FRUIT_RESPAWN_X_MARGIN);
-      const type = Phaser.Utils.Array.GetRandom(FRUIT_POOL);
-      this.fruit = this.addFruit(spawnX, -100, type);
-      this.fruitArrow.setTint(FRUIT_CONFIGS[type].arrowTint);
-
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Phaser.Math.FloatBetween(FRUIT_LAUNCH_SPEED_MIN, FRUIT_LAUNCH_SPEED_MAX);
-      this.matter.body.setVelocity(this.fruit.body, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed });
-      this.matter.body.setAngularVelocity(this.fruit.body, (Math.random() - 0.5) * 2 * FRUIT_LAUNCH_SPIN);
-
-      this.props.push(this.fruit);
+      this.fruitManager.respawnFruit();
     });
 
     // Drop score-many crates from the sky, staggered
@@ -453,22 +437,6 @@ export default class PlaygroundScene extends Phaser.Scene {
         onComplete: () => star.destroy(),
       });
     }
-  }
-
-  addFruit(x, y, type = 'orange') {
-    const cfg = FRUIT_CONFIGS[type];
-    const radius = this.textures.get(cfg.key).getSourceImage().width / 2 - 3;
-    const fruit = this.matter.add.image(x, y, cfg.key, null, {
-      shape: { type: 'circle', radius },
-      restitution: 0.75,
-      friction: 0.05,
-      frictionAir: 0.005,
-      density: cfg.density,
-    });
-    fruit.body.label = 'fruit';
-    fruit.fruitType = type;
-    fruit.setDepth(5);
-    return fruit;
   }
 
   addCrate(x, y) {
@@ -850,79 +818,13 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
   }
 
-  updateFruitIdleTimer(delta) {
-    if (!this.fruit?.body) {
-      this.fruitIdleTime = 0;
-      this.fruitIdleText?.setVisible(false);
-      return;
-    }
-
-    const { x: vx, y: vy } = this.fruit.body.velocity;
-    const speed = Math.sqrt(vx * vx + vy * vy);
-
-    if (speed < FRUIT_IDLE_SPEED_THRESHOLD) {
-      this.fruitIdleTime += delta * 0.001;
-    } else {
-      this.fruitIdleTime = 0;
-      this.fruitIdleText.setVisible(false);
-      return;
-    }
-
-    const remaining = Math.max(0, FRUIT_IDLE_RESPAWN_DELAY - this.fruitIdleTime);
-
-    if (remaining <= 5) {
-      this.fruitIdleText
-        .setText(`Ball stuck — respawning in ${Math.ceil(remaining)}s`)
-        .setVisible(true);
-    } else {
-      this.fruitIdleText.setVisible(false);
-    }
-
-    if (this.fruitIdleTime >= FRUIT_IDLE_RESPAWN_DELAY) {
-      this.fruitIdleTime = 0;
-      this.fruitIdleText.setVisible(false);
-      this.respawnFruit();
-    }
-  }
-
-  respawnFruit() {
-    const prevType = this.fruit?.fruitType ?? 'orange';
-    if (this.fruit) {
-      this.props = this.props.filter(p => p !== this.fruit);
-      this.fruit.destroy();
-      this.fruit = null;
-    }
-
-    const spawnX = Phaser.Math.Between(FRUIT_RESPAWN_X_MIN, this.worldWidth - FRUIT_RESPAWN_X_MARGIN);
-    const type = Phaser.Utils.Array.GetRandom(FRUIT_POOL);
-    this.fruit = this.addFruit(spawnX, -100, type);
-    this.fruitArrow.setTint(FRUIT_CONFIGS[type].arrowTint);
-
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Phaser.Math.FloatBetween(FRUIT_LAUNCH_SPEED_MIN, FRUIT_LAUNCH_SPEED_MAX);
-    this.matter.body.setVelocity(this.fruit.body, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed });
-    this.matter.body.setAngularVelocity(this.fruit.body, (Math.random() - 0.5) * 2 * FRUIT_LAUNCH_SPIN);
-
-    this.props.push(this.fruit);
-  }
-
   update(time, delta) {
     this.elephant.update(time, delta, this.props);
     this.touchControls.postUpdate();
     this.updateIndicatorArrows();
     this.updateClouds(delta);
     this.updateBirds(delta);
-    this.updateFruitIdleTimer(delta);
-    this.enforceFruitBounds();
-  }
-
-  enforceFruitBounds() {
-    if (!this.fruit?.body) return;
-    const margin = 200;
-    const x = this.fruit.x;
-    const y = this.fruit.y;
-    if (x < -margin || x > this.worldWidth + margin || y > WORLD_HEIGHT + margin) {
-      this.respawnFruit();
-    }
+    this.fruitManager.updateFruitIdleTimer(delta);
+    this.fruitManager.enforceFruitBounds();
   }
 }

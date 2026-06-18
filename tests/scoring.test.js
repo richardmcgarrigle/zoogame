@@ -28,9 +28,17 @@ function makeGoalScene(initialScore = 0) {
     setVisible: vi.fn().mockReturnThis(),
   };
 
+  const fruitManager = {
+    fruit,
+    respawnFruit: vi.fn(),
+  };
+
   const scene = {
     score: initialScore,
-    fruit,
+    // fruit getter/setter backed by fruitManager
+    get fruit() { return this.fruitManager.fruit; },
+    set fruit(v) { this.fruitManager.fruit = v; },
+    fruitManager,
     fruitArrow,
     goalArrow,
     scoreText,
@@ -90,7 +98,7 @@ describe('Feature: Goal Scoring', () => {
 
     it('destroys the fruit', () => {
       const scene = makeGoalScene(0);
-      const fruit = scene.fruit;
+      const fruit = scene.fruitManager.fruit;
       PlaygroundScene.prototype.onGoalScored.call(scene);
       expect(fruit.destroy).toHaveBeenCalled();
     });
@@ -98,7 +106,7 @@ describe('Feature: Goal Scoring', () => {
     it('sets fruit to null after destroying', () => {
       const scene = makeGoalScene(0);
       PlaygroundScene.prototype.onGoalScored.call(scene);
-      expect(scene.fruit).toBeNull();
+      expect(scene.fruitManager.fruit).toBeNull();
     });
   });
 

@@ -28,11 +28,27 @@ function makeRestartScene(score = 5) {
 
   const platformSpawner = { buildPlatforms: vi.fn(), platforms: [] };
 
+  const newFruit = {
+    body: { label: 'fruit', velocity: { x: 0, y: 0 } },
+    destroy: vi.fn(),
+    fruitType: 'orange',
+  };
+
+  const fruitManager = {
+    fruit,
+    addFruit: vi.fn(() => {
+      fruitManager.fruit = newFruit;
+      return newFruit;
+    }),
+  };
+
   const scene = {
     score,
     worldWidth: 1280,
     elephant,
-    fruit,
+    fruitManager,
+    get fruit() { return this.fruitManager.fruit; },
+    set fruit(v) { this.fruitManager.fruit = v; },
     fruitArrow,
     crates: [crate],
     props: [fruit, crate],
@@ -40,11 +56,6 @@ function makeRestartScene(score = 5) {
     platformSpawner,
     repositionGoal: vi.fn(),
     buildPalms: vi.fn(),
-    addFruit: vi.fn(() => ({
-      body: { label: 'fruit', velocity: { x: 0, y: 0 } },
-      destroy: vi.fn(),
-      fruitType: 'orange',
-    })),
     addCrate: vi.fn(() => ({
       body: { label: 'crate' },
       destroy: vi.fn(),
