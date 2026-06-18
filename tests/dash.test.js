@@ -4,6 +4,7 @@ vi.mock('phaser');
 
 import { justDownMock } from 'phaser';
 import Elephant from '../src/objects/Elephant.js';
+import DashEffect from '../src/objects/DashEffect.js';
 import { createMockScene } from './helpers/mockScene.js';
 
 beforeEach(() => {
@@ -14,6 +15,21 @@ function makeElephant() {
   const { scene, sprite } = createMockScene();
   const elephant = new Elephant(scene, 0, 0);
   return { scene, sprite, elephant };
+}
+
+function makeDashEffect() {
+  const scene = {
+    add: {
+      graphics: vi.fn(() => ({
+        setDepth: vi.fn().mockReturnThis(),
+        clear: vi.fn().mockReturnThis(),
+        fillStyle: vi.fn().mockReturnThis(),
+        fillRect: vi.fn().mockReturnThis(),
+      })),
+    },
+  };
+  const effect = new DashEffect(scene);
+  return effect;
 }
 
 describe('Feature: Dash', () => {
@@ -75,47 +91,43 @@ describe('Feature: Dash', () => {
     });
   });
 
-  describe('Scenario: Wind streaks appear while dashing', () => {
+  describe('Scenario: Wind streaks appear while dashing (DashEffect)', () => {
     it('spawns 3 wind streak particles per frame while dashing and moving', () => {
-      const { elephant } = makeElephant();
-      elephant.isDashing = true;
-      elephant.sprite.body.velocity.x = 9; // moving
+      const effect = makeDashEffect();
+      const before = effect._streaks.length;
 
-      const before = elephant.windStreaks.length;
-      elephant.updateWindEffect(16);
+      effect.update(16, 0, 0, true, 1, 9); // dashing, moving right
 
-      expect(elephant.windStreaks.length - before).toBe(3);
+      expect(effect._streaks.length - before).toBe(3);
     });
 
     it('does not spawn streaks when not dashing', () => {
-      const { elephant } = makeElephant();
-      elephant.isDashing = false;
-      elephant.sprite.body.velocity.x = 9;
+      const effect = makeDashEffect();
+      const before = effect._streaks.length;
 
-      const before = elephant.windStreaks.length;
-      elephant.updateWindEffect(16);
+      effect.update(16, 0, 0, false, 1, 9); // not dashing
 
-      expect(elephant.windStreaks.length).toBe(before);
+      expect(effect._streaks.length).toBe(before);
     });
   });
 
-  describe('Scenario: Wind streak lifetime', () => {
+  describe('Scenario: Wind streak lifetime (DashEffect)', () => {
     it('removes streaks after 260ms lifetime', () => {
-      const { elephant } = makeElephant();
-      elephant.windStreaks = [{ x: 0, y: 0, vx: -280, len: 50, life: 260, maxLife: 260 }];
+      const effect = makeDashEffect();
+      effect._streaks.push({ x: 0, y: 0, vx: -280, len: 50, life: 260, maxLife: 260 });
 
-      elephant.updateWindEffect(300); // delta > life
+      effect.update(300, 0, 0, false, 1, 0); // delta > life
 
-      expect(elephant.windStreaks.length).toBe(0);
+      expect(effect._streaks.length).toBe(0);
     });
 
     it('keeps streaks alive within their lifetime', () => {
-      const { elephant } = makeElephant();
-      elephant.windStreaks = [{ x: 0, y: 0, vx: -280, len: 50, life: 260, maxLife: 260 }];
+      const effect = makeDashEffect();
+      effect._streaks.push({ x: 0, y: 0, vx: -280, len: 50, life: 260, maxLife: 260 });
 
-      elephant.updateWindEffect(100); // only 100ms elapsed
+      effect.update(100, 0, 0, false, 1, 0); // only 100ms elapsed
 
-      expect(elephant.windStreaks.length).toBe(1);
+      expect(effect._streaks.length).toBe(1);
     });
   });
 

@@ -156,12 +156,6 @@ export function createMockElephant(sceneOverrides = {}) {
   const { scene, sprite } = createMockScene();
   Object.assign(scene, sceneOverrides);
 
-  const windGraphics = {
-    clear: vi.fn().mockReturnThis(),
-    fillStyle: vi.fn().mockReturnThis(),
-    fillRect: vi.fn().mockReturnThis(),
-  };
-
   return {
     scene,
     sprite,
@@ -179,11 +173,9 @@ export function createMockElephant(sceneOverrides = {}) {
     celebrateTimer: 0,
     wasGrounded: false,
     contactBodies: new Map(),
-    windStreaks: [],
-    windGraphics,
+    dashEffect: { update: vi.fn() },
     _prevPadButtons: {},
     surfaceAngle: 0,
     updateVisuals: vi.fn(),
-    updateWindEffect: vi.fn(),
   };
 }

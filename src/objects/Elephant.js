@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import DashEffect from './DashEffect.js';
 
 const MOVE_SPEED = 4.5;
 const MOVE_SPEED_AIR = 3.2;
@@ -13,10 +14,6 @@ const KICK_POWER_SCALE = 1.6;
 
 const DASH_SPEED = 9;
 
-const WIND_STREAK_LIFE = 260;
-const WIND_STREAK_SPEED = 280;
-const WIND_STREAK_LEN_MIN = 35;
-const WIND_STREAK_LEN_MAX = 100;
 
 // Gamepad analogue stick dead zone — normalised (0–1). Below this displacement
 // the stick is ignored to avoid drift from centring imprecision.
@@ -65,8 +62,7 @@ export default class Elephant {
     }
     this.sprite.play('elephant-idle');
 
-    this.windGraphics = scene.add.graphics().setDepth(9);
-    this.windStreaks = [];
+    this.dashEffect = new DashEffect(scene);
     this.isDashing = false;
 
     this._prevPadButtons = {};
@@ -249,48 +245,13 @@ export default class Elephant {
 
     this.wasGrounded = isGrounded;
     this.updateVisuals(time);
-    this.updateWindEffect(delta);
+    this.dashEffect.update(delta, this.sprite.x, this.sprite.y, this.isDashing, this.facing, this.sprite.body.velocity.x);
 
     // Record button states for next frame's justDown detection.
     for (const p of allPads) {
       for (let i = 0; i < (p.buttons?.length ?? 0); i++) {
         this._prevPadButtons[`${p.index}_${i}`] = p.buttons[i]?.pressed ?? false;
       }
-    }
-  }
-
-  updateWindEffect(delta) {
-    const ex = this.sprite.x;
-    const ey = this.sprite.y;
-    const isMoving = Math.abs(this.sprite.body.velocity.x) > 1;
-
-    if (this.isDashing && isMoving) {
-      for (let i = 0; i < 3; i++) {
-        const len = WIND_STREAK_LEN_MIN + Math.random() * (WIND_STREAK_LEN_MAX - WIND_STREAK_LEN_MIN);
-        const offsetX = this.facing * (Math.random() * 55 - 10);
-        const offsetY = (Math.random() - 0.5) * 72;
-        this.windStreaks.push({
-          x: ex + offsetX,
-          y: ey + offsetY,
-          vx: -this.facing * WIND_STREAK_SPEED,
-          len,
-          life: WIND_STREAK_LIFE,
-          maxLife: WIND_STREAK_LIFE,
-        });
-      }
-    }
-
-    this.windGraphics.clear();
-    for (let i = this.windStreaks.length - 1; i >= 0; i--) {
-      const s = this.windStreaks[i];
-      s.x += s.vx * delta * 0.001;
-      s.life -= delta;
-      if (s.life <= 0) { this.windStreaks.splice(i, 1); continue; }
-      const alpha = (s.life / s.maxLife) * 0.85;
-      const color = Math.random() > 0.4 ? 0xddf4ff : 0xffffff;
-      this.windGraphics.fillStyle(color, alpha);
-      const drawX = s.vx < 0 ? s.x - s.len : s.x;
-      this.windGraphics.fillRect(drawX, s.y - 2, s.len, 4);
     }
   }
 
