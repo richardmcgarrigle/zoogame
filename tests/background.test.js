@@ -161,13 +161,21 @@ describe('Feature: Background Environment', () => {
     });
 
     it('does not nudge fruit when bird is beyond 44px radius', () => {
-      const scene = makeBirdScene();
-      PlaygroundScene.prototype.createBirds.call(scene);
-
-      scene.matter = { body: { setVelocity: vi.fn(), setAngularVelocity: vi.fn() } };
-      const bird = scene.birds[0];
-      scene.fruit = { x: bird.x + 100, y: bird.y, body: { velocity: { x: 0, y: 0 } } }; // too far
-      bird._hitCooldown = 0;
+      // Use a single manually placed bird to avoid other randomly-positioned
+      // birds from createBirds() inadvertently landing within range.
+      const scene = {
+        birds: [{
+          x: 400, y: 200,
+          _speed: 80, _dir: 1, _bobOffset: 0,
+          _hitCooldown: 0,
+          _flapTimer: 0, _flapFrame: 0,
+          setTexture: vi.fn(),
+        }],
+        cameras: { main: { scrollX: 0, width: 800 } },
+        time: { now: 0 },
+        matter: { body: { setVelocity: vi.fn(), setAngularVelocity: vi.fn() } },
+        fruit: { x: 400 + 100, y: 200, body: { velocity: { x: 0, y: 0 } } }, // 100px away > 44
+      };
 
       PlaygroundScene.prototype.updateBirds.call(scene, 16);
 
