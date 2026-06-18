@@ -282,6 +282,7 @@ export default class PlatformSpawner {
   resolveOverlap(candX, candY, scale, angle, placedBounds, minX, maxX, effectiveMaxY) {
     let cx = candX, cy = candY;
     let bounds = this.getPlatformBounds(cx, cy, scale, angle);
+    let converged = false;
 
     for (let iter = 0; iter < 30; iter++) {
       const groundY = this.terrain.minTerrainYInRange(bounds.minX, bounds.maxX);
@@ -303,7 +304,7 @@ export default class PlatformSpawner {
           if (s > culpritScore) { culprit = { other, xOverlap, yOverlap }; culpritScore = s; }
         }
       }
-      if (!culprit) break;
+      if (!culprit) { converged = true; break; }
 
       const candHalfH = (bounds.maxY - bounds.minY) / 2;
       const candHalfW = (bounds.maxX - bounds.minX) / 2;
@@ -330,6 +331,10 @@ export default class PlatformSpawner {
       }
       if (!bestEscape) break;
       cx = bestEscape.x; cy = bestEscape.y; bounds = bestEscapeBounds;
+    }
+
+    if (!converged) {
+      console.warn('resolveOverlap: iteration limit reached without convergence at', cx, cy);
     }
 
     return { x: cx, y: cy, bounds };

@@ -325,6 +325,10 @@ export default class TerrainManager {
    * @returns {number}  Ground y coordinate at that x.
    */
   getTerrainYAt(x) {
+    if (!this.terrainPoints?.length) {
+      console.error('getTerrainYAt called before buildGround() — returning fallback y');
+      return GROUND_SURFACE_Y;
+    }
     const points = this.terrainPoints;
     const clampedX = Phaser.Math.Clamp(x, points[0].x, points[points.length - 1].x);
     for (let i = 0; i < points.length - 1; i++) {
