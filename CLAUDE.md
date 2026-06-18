@@ -4,6 +4,8 @@
 
 After completing any task that modifies files, always commit the changes and push to origin before finishing.
 
+Use trunk-based development: commit directly to `main` for small changes. For larger changes, create a short-lived feature branch, keep it in sync with `main`, and merge it via a pull request as soon as it is ready — typically within a day or two. Never let branches live long enough to diverge significantly from `main`.
+
 After any implementation, check existing documentation for gaps or details that no longer reflect the current code, and update it as needed before finishing.
 
 ## Use Cases
