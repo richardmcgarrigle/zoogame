@@ -1,4 +1,4 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 import { generatePlaceholderTextures, TEXTURE_SIZES } from '../util/textures.js';
 import Elephant from '../objects/Elephant.js';
 import TouchControls from '../objects/TouchControls.js';
@@ -7,6 +7,7 @@ import TerrainManager from '../managers/TerrainManager.js';
 import PlatformSpawner from '../managers/PlatformSpawner.js';
 import FruitManager, { FRUIT_CONFIGS } from '../managers/FruitManager.js';
 import CollisionHandler from '../managers/CollisionHandler.js';
+import UIManager from '../managers/UIManager.js';
 import {
   WORLD_HEIGHT,
   AMPLITUDE_PER_SCORE,
@@ -32,12 +33,6 @@ const FRUIT_SPAWN_Y = 850;
 const FRUIT_RESPAWN_DELAY = 1700;
 const WALL_BOUNCE_MIN_SPEED = 4;
 
-// Goal animation
-const GOAL_FLASH_INTERVAL = 120;    // ms between score text flash toggles
-const GOAL_FLASH_DURATION = 1200;   // ms total flash duration
-const GOAL_TEXT_FONT_SIZE = '120px';
-const GOAL_TEXT_STROKE = 10;
-
 // Palm tree placement
 const PALM_SPACING = 560;     // px between palm tree slots
 const PALM_JITTER = 90;       // px of random horizontal offset per slot
@@ -52,6 +47,14 @@ export default class PlaygroundScene extends Phaser.Scene {
   constructor() {
     super('PlaygroundScene');
   }
+
+  // ── Convenience accessors delegating to UIManager ─────────────────────────
+
+  get scoreText()        { return this.ui?.scoreText; }
+  get fruitIdleText()    { return this.ui?.fruitIdleText; }
+  get goalArrow()        { return this.ui?.goalArrow; }
+  get fruitArrow()       { return this.ui?.fruitArrow; }
+  get selectedPadIndex() { return this.ui?.selectedPadIndex ?? -1; }
 
   get fruit() {
     return this.fruitManager ? this.fruitManager.fruit : null;
@@ -138,55 +141,17 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.elephant.sprite, true, 0.1, 0);
     this.cameras.main.scrollY = WORLD_HEIGHT - this.cameras.main.height;
 
-    this.createIndicatorArrows();
+    this.ui = new UIManager(this);
     this.createClouds();
     this.createBirds();
-    this.createControllerDropdown();
 
     this.scale.on('resize', (gameSize) => {
       this.cameras.main.setSize(gameSize.width, gameSize.height);
       this.cameras.main.scrollY = WORLD_HEIGHT - gameSize.height;
-      this.scoreText.setX(gameSize.width - 12);
-      this.fruitIdleText.setX(gameSize.width / 2);
+      this.ui.onResize(gameSize);
     });
 
-    this.add
-      .text(12, 12, 'Move: Arrows/AD  Jump: Up/W  Dash: Space/Square (hold)  Restart: R', {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#1a1a1a',
-        backgroundColor: '#ffffffaa',
-        padding: { x: 8, y: 4 },
-      })
-      .setScrollFactor(0)
-      .setDepth(100);
-
-    this.scoreText = this.add
-      .text(this.scale.width - 12, 12, 'Score: 0', {
-        fontFamily: 'monospace',
-        fontSize: '20px',
-        color: '#1a1a1a',
-        backgroundColor: '#ffffffaa',
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(100);
-
     this.input.keyboard.on('keydown-R', () => this.restartLevel());
-
-    this.fruitIdleText = this.add
-      .text(this.scale.width / 2, 56, '', {
-        fontFamily: 'monospace',
-        fontSize: '18px',
-        color: '#ff4422',
-        backgroundColor: '#ffffffcc',
-        padding: { x: 10, y: 5 },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(100)
-      .setVisible(false);
 
     this.collisionHandler = new CollisionHandler(this);
   }
@@ -202,7 +167,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     if (this.fruitManager.fruit) this.fruitManager.fruit.destroy();
     this.fruitManager.fruit = null;
     this.fruitManager.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y, restartType);
-    this.fruitArrow.setTint(FRUIT_CONFIGS[restartType].arrowTint);
+    this.ui.fruitArrow.setTint(FRUIT_CONFIGS[restartType].arrowTint);
     this.crates.forEach(c => c?.destroy());
     this.crates = [];
     const crateX = 950;
@@ -257,59 +222,8 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.score += 1;
     this.scoreText.setText(`Score: ${this.score}`);
 
-    // Flash the score text
-    let flashes = 0;
-    const flashTimer = this.time.addEvent({
-      delay: GOAL_FLASH_INTERVAL,
-      repeat: 9,
-      callback: () => {
-        flashes++;
-        this.scoreText.setVisible(flashes % 2 === 0);
-      },
-      callbackScope: this,
-    });
-    this.time.delayedCall(GOAL_FLASH_DURATION, () => {
-      flashTimer.remove();
-      this.scoreText.setVisible(true);
-    });
-
-    // Show big GOAL! text in the centre of the screen
-    const { width, height } = this.scale;
-    const goalLabel = this.add
-      .text(width / 2, height / 2, 'GOAL!', {
-        fontFamily: 'Impact, "Arial Black", sans-serif',
-        fontSize: GOAL_TEXT_FONT_SIZE,
-        color: '#ffffff',
-        stroke: '#e63c00',
-        strokeThickness: GOAL_TEXT_STROKE,
-        shadow: { offsetX: 4, offsetY: 4, color: '#000', blur: 8, fill: true },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(200)
-      .setAlpha(0);
-
-    this.tweens.add({
-      targets: goalLabel,
-      alpha: { from: 0, to: 1 },
-      scaleX: { from: 0.5, to: 1 },
-      scaleY: { from: 0.5, to: 1 },
-      duration: 250,
-      ease: 'Back.Out',
-      yoyo: false,
-      onComplete: () => {
-        this.tweens.add({
-          targets: goalLabel,
-          alpha: 0,
-          scaleX: 1.3,
-          scaleY: 1.3,
-          delay: 700,
-          duration: 400,
-          ease: 'Power2',
-          onComplete: () => goalLabel.destroy(),
-        });
-      },
-    });
+    this.ui.flashScore();
+    this.ui.showGoalAnimation();
 
     this.celebrateGoal(this.fruitManager.fruit.x, this.fruitManager.fruit.y);
 
@@ -648,156 +562,10 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
   }
 
-  createControllerDropdown() {
-    this.selectedPadIndex = -1; // -1 = use all pads
-
-    const wrap = document.createElement('div');
-    wrap.style.cssText = [
-      'position:fixed', 'top:8px', 'left:50%', 'transform:translateX(-50%)',
-      'z-index:1000', 'font-family:monospace', 'font-size:13px',
-      'background:rgba(255,255,255,0.75)', 'padding:4px 10px', 'border-radius:4px',
-      'display:flex', 'align-items:center', 'gap:6px',
-    ].join(';');
-
-    const label = document.createElement('span');
-    label.textContent = 'Controller:';
-
-    const sel = document.createElement('select');
-    sel.style.cssText = 'font-family:monospace;font-size:13px;max-width:220px';
-
-    const refresh = () => {
-      const prev = sel.value;
-      sel.innerHTML = '';
-      const opt0 = document.createElement('option');
-      opt0.value = '-1';
-      opt0.textContent = 'Auto (all)';
-      sel.appendChild(opt0);
-
-      const raw = navigator.getGamepads();
-      for (let i = 0; i < raw.length; i++) {
-        if (!raw[i]) continue;
-        const opt = document.createElement('option');
-        opt.value = String(i);
-        // Trim long vendor strings — keep the readable part before the parenthesis
-        opt.textContent = raw[i].id.replace(/\s*\(.*\)/, '').trim() || `Pad ${i}`;
-        sel.appendChild(opt);
-        // Auto-select first standard gamepad on first load
-        if (this.selectedPadIndex === -1 && raw[i].id.includes('STANDARD GAMEPAD')) {
-          this.selectedPadIndex = i;
-        }
-      }
-      sel.value = prev !== '' && [...sel.options].some(o => o.value === prev)
-        ? prev
-        : String(this.selectedPadIndex);
-    };
-
-    sel.addEventListener('change', () => {
-      this.selectedPadIndex = parseInt(sel.value);
-    });
-
-    window.addEventListener('gamepadconnected', refresh);
-    window.addEventListener('gamepaddisconnected', refresh);
-
-    wrap.appendChild(label);
-    wrap.appendChild(sel);
-    document.body.appendChild(wrap);
-    this._controllerDropdown = wrap;
-
-    // Clean up DOM when scene shuts down
-    this.events.once('shutdown', () => wrap.remove());
-
-    refresh();
-  }
-
-  createIndicatorArrows() {
-    // Goal arrow: white; fruit arrow: orange. Both use same texture, tinted.
-    this.goalArrow = this.add
-      .image(0, 0, 'arrowIndicator')
-      .setScrollFactor(0)
-      .setDepth(200)
-      .setVisible(false)
-      .setTint(0xffffff);
-
-    this.fruitArrow = this.add
-      .image(0, 0, 'arrowIndicator')
-      .setScrollFactor(0)
-      .setDepth(200)
-      .setVisible(false)
-      .setTint(0xff8c3c);
-
-  }
-
-  updateIndicatorArrows() {
-    const cam = this.cameras.main;
-    const cw = cam.width;
-    const ch = cam.height;
-    const cx = cw / 2;
-    const cy = ch / 2;
-    // Inset from screen edge so the arrow sits fully inside the viewport.
-    const MARGIN = 52;
-
-    const targets = [
-      { sprite: this.goal, arrow: this.goalArrow },
-      { sprite: this.fruit, arrow: this.fruitArrow },
-    ];
-
-    for (const { sprite, arrow } of targets) {
-      if (!sprite || !arrow) continue;
-
-      // World → screen position.
-      const sx = sprite.x - cam.scrollX;
-      const sy = sprite.y - cam.scrollY;
-
-      // Target is visible — hide the indicator.
-      if (sx >= 0 && sx <= cw && sy >= 0 && sy <= ch) {
-        arrow.setVisible(false);
-        continue;
-      }
-
-      arrow.setVisible(true);
-
-      // Direction from screen centre to target.
-      const dx = sx - cx;
-      const dy = sy - cy;
-      const angle = Math.atan2(dy, dx);
-
-      // Find the point on the MARGIN-inset rectangle in that direction.
-      const hw = cx - MARGIN;
-      const hh = cy - MARGIN;
-      let ex, ey;
-      if (Math.abs(dx) * hh > Math.abs(dy) * hw) {
-        // Hits left or right edge.
-        const scale = hw / Math.abs(dx);
-        ex = cx + Math.sign(dx) * hw;
-        ey = cy + dy * scale;
-      } else {
-        // Hits top or bottom edge.
-        const scale = hh / Math.abs(dy);
-        ex = cx + dx * scale;
-        ey = cy + Math.sign(dy) * hh;
-      }
-
-      arrow.setPosition(ex, ey);
-      arrow.setRotation(angle);
-    }
-
-    // Flash the highest-priority visible arrow; reset the other to full alpha.
-    const fruitVisible = this.fruitArrow?.visible;
-    const goalVisible  = this.goalArrow?.visible;
-    const flashAlpha = (this.time.now % 600) < 450 ? 1 : 0.1;
-
-    if (fruitVisible) {
-      this.fruitArrow.setAlpha(flashAlpha);
-      if (goalVisible) this.goalArrow.setAlpha(1);
-    } else if (goalVisible) {
-      this.goalArrow.setAlpha(flashAlpha);
-    }
-  }
-
   update(time, delta) {
     this.elephant.update(time, delta, this.props);
     this.touchControls.postUpdate();
-    this.updateIndicatorArrows();
+    this.ui.updateIndicatorArrows();
     this.updateClouds(delta);
     this.updateBirds(delta);
     this.fruitManager.updateFruitIdleTimer(delta);

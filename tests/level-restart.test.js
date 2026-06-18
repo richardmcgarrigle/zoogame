@@ -50,6 +50,7 @@ function makeRestartScene(score = 5) {
     get fruit() { return this.fruitManager.fruit; },
     set fruit(v) { this.fruitManager.fruit = v; },
     fruitArrow,
+    ui: { fruitArrow },
     crates: [crate],
     props: [fruit, crate],
     terrain,

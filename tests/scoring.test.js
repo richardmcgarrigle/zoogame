@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('phaser');
 
 import PlaygroundScene from '../src/scenes/PlaygroundScene.js';
+import UIManager from '../src/managers/UIManager.js';
 
 const FRUIT_RESPAWN_DELAY = 1700;
 
@@ -73,6 +74,10 @@ function makeGoalScene(initialScore = 0) {
     cameras: { main: { width: 800, height: 600 } },
     extendWorld: vi.fn(),
     celebrateGoal: vi.fn(),
+    ui: {
+      flashScore: vi.fn(),
+      showGoalAnimation: vi.fn(),
+    },
     elephant: {
       sprite: { x: 100, y: 800 },
       celebrate: vi.fn(),
@@ -115,8 +120,8 @@ describe('Feature: Goal Scoring', () => {
       const scene = makeGoalScene(0);
       PlaygroundScene.prototype.onGoalScored.call(scene);
 
-      // delayedCall[0] = 1200ms flash cleanup, delayedCall[1] = 1700ms fruit respawn
-      const fruitRespawnCall = scene.time.delayedCall.mock.calls[1];
+      // delayedCall[0] = 1700ms fruit respawn (flash cleanup is now handled by UIManager)
+      const fruitRespawnCall = scene.time.delayedCall.mock.calls[0];
       expect(fruitRespawnCall[0]).toBe(FRUIT_RESPAWN_DELAY);
     });
   });
@@ -126,8 +131,8 @@ describe('Feature: Goal Scoring', () => {
       const scene = makeGoalScene(2); // score will become 3
       PlaygroundScene.prototype.onGoalScored.call(scene);
 
-      // delayedCall[0] = flash cleanup, [1] = fruit respawn, [2..4] = 3 crates
-      const crateCalls = scene.time.delayedCall.mock.calls.slice(2);
+      // delayedCall[0] = fruit respawn, [1..3] = 3 crates (flash cleanup is in UIManager)
+      const crateCalls = scene.time.delayedCall.mock.calls.slice(1);
       expect(crateCalls.length).toBe(3); // new score = 3
     });
 
@@ -135,25 +140,47 @@ describe('Feature: Goal Scoring', () => {
       const scene = makeGoalScene(0);
       PlaygroundScene.prototype.onGoalScored.call(scene);
 
-      const crateCalls = scene.time.delayedCall.mock.calls.slice(2);
+      const crateCalls = scene.time.delayedCall.mock.calls.slice(1);
       expect(crateCalls.length).toBe(1);
     });
   });
 
   describe('Scenario: Score display flashes', () => {
     it('schedules score flash timer with 120ms interval', () => {
-      const scene = makeGoalScene(0);
-      PlaygroundScene.prototype.onGoalScored.call(scene);
+      const scoreText = {
+        setVisible: vi.fn().mockReturnThis(),
+      };
+      const time = {
+        addEvent: vi.fn(() => ({ remove: vi.fn() })),
+        delayedCall: vi.fn(),
+      };
+      const ui = {
+        _scoreText: scoreText,
+        scene: { time },
+      };
 
-      const flashCall = scene.time.addEvent.mock.calls[0];
+      UIManager.prototype.flashScore.call(ui);
+
+      const flashCall = time.addEvent.mock.calls[0];
       expect(flashCall[0].delay).toBe(120);
     });
 
     it('repeats flash for 10 cycles (repeat: 9 = 10 total events)', () => {
-      const scene = makeGoalScene(0);
-      PlaygroundScene.prototype.onGoalScored.call(scene);
+      const scoreText = {
+        setVisible: vi.fn().mockReturnThis(),
+      };
+      const time = {
+        addEvent: vi.fn(() => ({ remove: vi.fn() })),
+        delayedCall: vi.fn(),
+      };
+      const ui = {
+        _scoreText: scoreText,
+        scene: { time },
+      };
 
-      const flashCall = scene.time.addEvent.mock.calls[0];
+      UIManager.prototype.flashScore.call(ui);
+
+      const flashCall = time.addEvent.mock.calls[0];
       expect(flashCall[0].repeat).toBe(9);
     });
   });
