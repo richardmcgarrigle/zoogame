@@ -3,18 +3,19 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('phaser');
 
 import PlaygroundScene from '../src/scenes/PlaygroundScene.js';
+import TerrainManager from '../src/managers/TerrainManager.js';
 import { TEXTURE_SIZES } from '../src/util/textures.js';
 
 // Platform leaf dimensions: 260 x 36
 const { width: PLAT_W, height: PLAT_H } = TEXTURE_SIZES.platformLeaf;
 
 function makeTerrainScene() {
+  const terrainManager = Object.create(TerrainManager.prototype);
+  terrainManager.terrainPoints = [{ x: 0, y: 900 }, { x: 10000, y: 900 }];
+  terrainManager.scene = {};
   const scene = {
-    terrainPoints: [{ x: 0, y: 900 }, { x: 10000, y: 900 }],
+    terrain: terrainManager,
   };
-  // platformOverlapAmount calls minTerrainYInRange which calls getTerrainYAt
-  scene.getTerrainYAt = PlaygroundScene.prototype.getTerrainYAt.bind(scene);
-  scene.minTerrainYInRange = PlaygroundScene.prototype.minTerrainYInRange.bind(scene);
   return scene;
 }
 
@@ -74,11 +75,12 @@ describe('Feature: Platforms — getPlatformBounds', () => {
 });
 
 function makeOverlapScene() {
+  const terrainManager = Object.create(TerrainManager.prototype);
+  terrainManager.terrainPoints = [{ x: 0, y: 900 }, { x: 10000, y: 900 }];
+  terrainManager.scene = {};
   const scene = {
-    terrainPoints: [{ x: 0, y: 900 }, { x: 10000, y: 900 }],
+    terrain: terrainManager,
   };
-  scene.getTerrainYAt = PlaygroundScene.prototype.getTerrainYAt.bind(scene);
-  scene.minTerrainYInRange = PlaygroundScene.prototype.minTerrainYInRange.bind(scene);
   return scene;
 }
 

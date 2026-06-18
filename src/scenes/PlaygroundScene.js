@@ -1,8 +1,16 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 import { generatePlaceholderTextures, TEXTURE_SIZES } from '../util/textures.js';
 import Elephant from '../objects/Elephant.js';
 import TouchControls from '../objects/TouchControls.js';
 import SoundManager from '../util/sounds.js';
+import TerrainManager from '../managers/TerrainManager.js';
+import {
+  WORLD_HEIGHT,
+  GROUND_SURFACE_Y,
+  AMPLITUDE_PER_SCORE,
+  MAX_TERRAIN_AMPLITUDE,
+  TERRAIN_SLIDE_DURATION,
+} from '../util/constants.js';
 import elephantCelebUrl  from '../assets/elephant_celebrate.png';
 import elephantIdleUrl    from '../assets/elephant_idle_1.png';
 import elephantRun1Url   from '../assets/elephant_run_1.png';
@@ -14,15 +22,8 @@ import toucan1Url from '../assets/toucan_flying_1.png';
 import toucan2Url from '../assets/toucan_flying_2.png';
 
 const BASE_WORLD_WIDTH = () => window.innerWidth;
-const WORLD_HEIGHT = 1000;
-const GROUND_HEIGHT = 90;
-const GROUND_SURFACE_Y = WORLD_HEIGHT - GROUND_HEIGHT;
-const GROUND_DEPTH = GROUND_HEIGHT + 60;
-const TERRAIN_SEGMENT_WIDTH = 60;
 
 const WIDTH_PER_SCORE = 300;
-const AMPLITUDE_PER_SCORE = 15;
-const MAX_TERRAIN_AMPLITUDE = 180;
 
 const PLATFORM_MIN_SCALE = 0.6;
 const PLATFORM_MAX_SCALE = 1.4;
@@ -60,9 +61,6 @@ const CLUSTER_SPREAD_MAX = 0.70;
 const CLUSTER_SPREAD_DECAY = 0.30; // factor per recursion depth
 const CLUSTER_MAX_DEPTH = 4;
 
-const OUTLINE = 0x1a1a1a;
-const OUTLINE_WIDTH = 6;
-
 const FRUIT_SPAWN_X = 620;
 const FRUIT_SPAWN_Y = 850;
 const FRUIT_RESPAWN_DELAY = 1700;
@@ -81,9 +79,6 @@ const GOAL_FLASH_INTERVAL = 120;    // ms between score text flash toggles
 const GOAL_FLASH_DURATION = 1200;   // ms total flash duration
 const GOAL_TEXT_FONT_SIZE = '120px';
 const GOAL_TEXT_STROKE = 10;
-
-// World extension animation
-const TERRAIN_SLIDE_DURATION = 700; // ms — new terrain chunk slides up from below
 
 // Palm tree placement
 const PALM_SPACING = 560;     // px between palm tree slots
@@ -153,14 +148,15 @@ export default class PlaygroundScene extends Phaser.Scene {
 
     this.score = 0;
     this.worldWidth = BASE_WORLD_WIDTH();
-    this.terrainAmplitude = 0;
+
+    this.terrain = new TerrainManager(this);
 
     this.matter.world.setBounds(0, 0, this.worldWidth, WORLD_HEIGHT, 64, true, true, false, true);
 
     // Build ground first so getTerrainYAt is available for goal placement.
-    this.buildGround();
+    this.terrain.buildGround();
     const goalX = this.worldWidth - 100;
-    this.goal = this.addGoal(goalX, this.getTerrainYAt(goalX) - TEXTURE_SIZES.goal.height / 2);
+    this.goal = this.addGoal(goalX, this.terrain.getTerrainYAt(goalX) - TEXTURE_SIZES.goal.height / 2);
     this.platforms = [];
     this.palmTrees = [];
     this.buildPlatforms();
@@ -263,7 +259,7 @@ export default class PlaygroundScene extends Phaser.Scene {
   }
 
   restartLevel() {
-    this.buildGround();
+    this.terrain.buildGround();
     this.repositionGoal();
     this.buildPlatforms();
     this.buildPalms();
@@ -276,14 +272,14 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.crates.forEach(c => c?.destroy());
     this.crates = [];
     const crateX = 950;
-    const crateY = Math.min(850, this.getTerrainYAt(crateX) - TEXTURE_SIZES.crate.height / 2 - 1);
+    const crateY = Math.min(850, this.terrain.getTerrainYAt(crateX) - TEXTURE_SIZES.crate.height / 2 - 1);
     const restartCrate = this.addCrate(crateX, crateY);
     this.crates.push(restartCrate);
     this.props = [this.fruit, restartCrate];
 
     // Reset elephant position and physics state above the new terrain.
     const spawnX = 180;
-    const spawnY = Math.min(800, this.getTerrainYAt(spawnX) - this.elephant.sprite.displayHeight / 2 - 1);
+    const spawnY = Math.min(800, this.terrain.getTerrainYAt(spawnX) - this.elephant.sprite.displayHeight / 2 - 1);
     this.elephant.sprite.setPosition(spawnX, spawnY);
     this.elephant.sprite.setVelocity(0, 0);
     this.matter.body.setAngularVelocity(this.elephant.sprite.body, 0);
@@ -422,17 +418,17 @@ export default class PlaygroundScene extends Phaser.Scene {
   extendWorld() {
     const prevWidth = this.worldWidth;
     this.worldWidth = BASE_WORLD_WIDTH() + this.score * WIDTH_PER_SCORE;
-    this.terrainAmplitude = Math.min(this.score * AMPLITUDE_PER_SCORE, MAX_TERRAIN_AMPLITUDE);
+    this.terrain.terrainAmplitude = Math.min(this.score * AMPLITUDE_PER_SCORE, MAX_TERRAIN_AMPLITUDE);
 
     this.matter.world.setBounds(0, 0, this.worldWidth, WORLD_HEIGHT, 64, true, true, false, true);
     this.cameras.main.setBounds(0, -5000, this.worldWidth, WORLD_HEIGHT + 5000);
 
     // Extend terrain first so getTerrainYAt works for the new chunk.
-    const terrainTween = this.extendTerrain(prevWidth, this.worldWidth);
+    const terrainTween = this.terrain.extendTerrain(prevWidth, this.worldWidth);
 
     // Slide the goal to its new position once the terrain reveal finishes.
     const newGoalX = this.worldWidth - 100;
-    const newGoalY = this.getTerrainYAt(newGoalX) - TEXTURE_SIZES.goal.height / 2;
+    const newGoalY = this.terrain.getTerrainYAt(newGoalX) - TEXTURE_SIZES.goal.height / 2;
     terrainTween.on('complete', () => {
       this.tweens.add({
         targets: this.goal,
@@ -458,133 +454,9 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.buildPalmsForChunk(prevWidth, this.worldWidth, true);
   }
 
-  // Appends new terrain points and physics bodies from prevWidth to newWidth,
-  // connecting smoothly from the last existing terrain point.
-  extendTerrain(prevWidth, newWidth) {
-    const lastPt = this.terrainPoints[this.terrainPoints.length - 1];
-    const startY = lastPt ? lastPt.y : GROUND_SURFACE_Y;
-
-    const newPoints = this.generateChunkTerrainHeights(prevWidth, newWidth, startY);
-    // newPoints[0] duplicates the existing last point; skip it when appending.
-    const toAdd = newPoints.slice(1);
-    for (const p of toAdd) this.terrainPoints.push(p);
-
-    // Add physics bodies for the new terrain segments.
-    const segPoints = [lastPt, ...toAdd];
-    for (let i = 0; i < segPoints.length - 1; i++) {
-      const p1 = segPoints[i];
-      const p2 = segPoints[i + 1];
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const segLength = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx);
-      const midX = (p1.x + p2.x) / 2;
-      const midY = (p1.y + p2.y) / 2;
-      const offset = GROUND_DEPTH / 2;
-      const cx = midX - Math.sin(angle) * offset;
-      const cy = midY + Math.cos(angle) * offset;
-
-      const body = this.matter.add.rectangle(cx, cy, segLength, GROUND_DEPTH, { isStatic: true });
-      this.matter.body.setAngle(body, angle);
-      body.label = 'ground';
-      this.groundBodies.push(body);
-    }
-
-    // Draw only the new chunk; old chunk graphics stay in place.
-    // Slide the new section up from below for a smooth reveal.
-    const chunkGfx = this.drawGroundGraphicsSegment(segPoints);
-    chunkGfx.setPosition(0, 600);
-    const slideTween = this.tweens.add({
-      targets: chunkGfx,
-      y: 0,
-      duration: TERRAIN_SLIDE_DURATION,
-      ease: 'Power2.Out',
-    });
-    (this.groundGraphicsObjects ??= []).push(chunkGfx);
-    return slideTween;
-  }
-
-  /**
-   * Generates terrain height samples for a single world chunk [startX, endX].
-   *
-   * The chunk is driven by a dual-sine wave (two overlapping frequencies) whose
-   * parameters are stored in `this.terrainWaveState`. On the first call the state
-   * is initialised from scratch; on subsequent calls it is slowly drifted toward
-   * new random targets (25 % blend per chunk) so adjacent chunks share a family
-   * resemblance rather than being completely independent.
-   *
-   * Phases are intentionally left unchanged between chunks — because the sine is
-   * evaluated at absolute x coordinates the wave is automatically continuous
-   * across the seam without any explicit blending of phase values.
-   *
-   * The first BLEND_SEGS segments linearly interpolate from startY to the wave
-   * target so the junction with the previous chunk is seamless.
-   *
-   * @param {number} startX  Left edge of the chunk in world pixels.
-   * @param {number} endX    Right edge of the chunk in world pixels.
-   * @param {number} startY  Ground y-value at the left edge (last point of previous chunk).
-   * @returns {{ x: number, y: number }[]} Array of sampled terrain points.
-   */
-  generateChunkTerrainHeights(startX, endX, startY) {
-    const chunkWidth = endX - startX;
-    const segments = Math.max(1, Math.round(chunkWidth / TERRAIN_SEGMENT_WIDTH));
-    const amplitude = this.terrainAmplitude;
-
-    // First chunk: initialise wave state from scratch.
-    // Subsequent chunks: slowly drift wavelengths toward new random targets so
-    // each chunk inherits the character of the previous one rather than picking
-    // completely new parameters. Phases stay fixed — because we evaluate the
-    // wave at absolute x coordinates the sinusoid is automatically continuous
-    // across chunk boundaries.
-    if (!this.terrainWaveState) {
-      this.terrainWaveState = {
-        wavelength1: 700 + Math.random() * 700,
-        wavelength2: 350 + Math.random() * 250,
-        phase1: Math.random() * Math.PI * 2,
-        phase2: Math.random() * Math.PI * 2,
-        amp1Factor: 0.75 + Math.random() * 0.25,
-        amp2Factor: 0.25 + Math.random() * 0.15,
-      };
-    } else {
-      const ws = this.terrainWaveState;
-      // 25% blend toward a new random target each chunk — gradual evolution.
-      ws.wavelength1 = ws.wavelength1 * 0.75 + (700  + Math.random() * 700)  * 0.25;
-      ws.wavelength2 = ws.wavelength2 * 0.75 + (350  + Math.random() * 250)  * 0.25;
-      ws.amp1Factor  = ws.amp1Factor  * 0.80 + (0.75 + Math.random() * 0.25) * 0.20;
-      ws.amp2Factor  = ws.amp2Factor  * 0.80 + (0.25 + Math.random() * 0.15) * 0.20;
-      // Phases are intentionally left unchanged — see note above.
-    }
-
-    const { wavelength1, wavelength2, phase1, phase2, amp1Factor, amp2Factor } = this.terrainWaveState;
-    const amp1 = amplitude * amp1Factor;
-    const amp2 = amplitude * amp2Factor;
-
-    const BLEND_SEGS = 5; // smooth y-value join over first N segments
-
-    const points = [];
-    for (let i = 0; i <= segments; i++) {
-      const x = startX + chunkWidth * (i / segments);
-      const wave = amp1 * Math.sin(x / wavelength1 * Math.PI * 2 + phase1) +
-                   amp2 * Math.sin(x / wavelength2 * Math.PI * 2 + phase2);
-      const targetY = Math.min(GROUND_SURFACE_Y + wave, WORLD_HEIGHT - 10);
-
-      let y;
-      if (i === 0) {
-        y = startY;
-      } else if (i < BLEND_SEGS) {
-        y = startY + (targetY - startY) * (i / BLEND_SEGS);
-      } else {
-        y = targetY;
-      }
-
-      points.push({ x, y });
-    }
-    return points;
-  }
-
   repositionGoal() {
     const goalX = this.worldWidth - 100;
-    const terrainY = this.getTerrainYAt(goalX);
+    const terrainY = this.terrain.getTerrainYAt(goalX);
     this.goal.setPosition(goalX, terrainY - TEXTURE_SIZES.goal.height / 2);
   }
 
@@ -634,7 +506,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       );
 
       if (Math.random() < clusterChance) {
-        const groundY = this.getTerrainYAt(miniCenter);
+        const groundY = this.terrain.getTerrainYAt(miniCenter);
         this.spawnPlatformCluster(miniCenter, groundY, miniStart, miniEnd, maxAngle, placedBounds, 0, animate);
       }
     }
@@ -674,7 +546,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     const rotatedHalfH = (refBounds.maxY - refBounds.minY) / 2;
     // Use the actual terrain height at the anchor so platforms on slopes still
     // leave enough clearance for the elephant to pass underneath.
-    const terrainAtAnchor = this.getTerrainYAt(anchorX);
+    const terrainAtAnchor = this.terrain.getTerrainYAt(anchorX);
     const effectiveMaxY = terrainAtAnchor - ELEPHANT_CLEARANCE - rotatedHalfH;
 
     // Constrain to world edges only; mini-chunk boundaries are just anchor hints.
@@ -685,7 +557,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     // Root platforms sit above ground; children float near their parent.
     let targetY;
     if (depth === 0) {
-      const groundAtAnchor = this.getTerrainYAt(anchorX);
+      const groundAtAnchor = this.terrain.getTerrainYAt(anchorX);
       targetY = groundAtAnchor - Phaser.Math.Between(PLATFORM_GAP_Y_MIN_FROM_GROUND, PLATFORM_GAP_Y_MAX);
     } else {
       targetY = anchorY + Phaser.Math.Between(-PLATFORM_GAP_Y_MAX, PLATFORM_GAP_Y_MAX);
@@ -791,7 +663,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     let bounds = this.getPlatformBounds(cx, cy, scale, angle);
 
     for (let iter = 0; iter < 30; iter++) {
-      const groundY = this.minTerrainYInRange(bounds.minX, bounds.maxX);
+      const groundY = this.terrain.minTerrainYInRange(bounds.minX, bounds.maxX);
       const groundPenetration = bounds.maxY + ELEPHANT_CLEARANCE - groundY;
       if (groundPenetration > 0) {
         const newY = Phaser.Math.Clamp(cy - groundPenetration, PLATFORM_MIN_Y, effectiveMaxY);
@@ -861,7 +733,7 @@ export default class PlaygroundScene extends Phaser.Scene {
 
     // Platform's bottom edge must be at least ELEPHANT_CLEARANCE above ground.
     // Sample the terrain densely across the full platform width to catch peaks.
-    const groundY = this.minTerrainYInRange(bounds.minX, bounds.maxX);
+    const groundY = this.terrain.minTerrainYInRange(bounds.minX, bounds.maxX);
     const groundPenetration = bounds.maxY + ELEPHANT_CLEARANCE - groundY;
     if (groundPenetration > 0) overlap += groundPenetration;
 
@@ -878,148 +750,14 @@ export default class PlaygroundScene extends Phaser.Scene {
     return overlap;
   }
 
-  // Samples terrain across [minX, maxX] and returns the minimum y (highest
-  // ground point) — used to guarantee clearance over the whole platform width.
-  minTerrainYInRange(minX, maxX) {
-    let min = Infinity;
-    const step = Math.max(1, (maxX - minX) / 8);
-    for (let sx = minX; sx <= maxX + step; sx += step) {
-      min = Math.min(min, this.getTerrainYAt(Math.min(sx, maxX)));
-    }
-    return min;
-  }
-
   // Moves a sprite up so its bottom edge clears the terrain surface at its x.
   clampAboveTerrain(sprite) {
-    const terrainY = this.getTerrainYAt(sprite.x);
+    const terrainY = this.terrain.getTerrainYAt(sprite.x);
     const halfH = sprite.displayHeight / 2;
     if (sprite.y + halfH > terrainY) {
       sprite.setPosition(sprite.x, terrainY - halfH - 1);
       if (sprite.body) this.matter.body.setVelocity(sprite.body, { x: 0, y: 0 });
     }
-  }
-
-  // Interpolates the terrain height profile to find the ground y at a given x.
-  getTerrainYAt(x) {
-    const points = this.terrainPoints;
-    const clampedX = Phaser.Math.Clamp(x, points[0].x, points[points.length - 1].x);
-    for (let i = 0; i < points.length - 1; i++) {
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      if (clampedX >= p1.x && clampedX <= p2.x) {
-        const t = (clampedX - p1.x) / (p2.x - p1.x);
-        return p1.y + (p2.y - p1.y) * t;
-      }
-    }
-    return GROUND_SURFACE_Y;
-  }
-
-  // Builds a random rolling-hills terrain: a smooth height profile rendered
-  // with a spline, backed by a chain of angled static rectangle bodies so
-  // the ball rolls naturally across slopes instead of catching on edges.
-  buildGround() {
-    if (this.groundBodies) {
-      for (const body of this.groundBodies) this.matter.world.remove(body);
-    }
-    for (const g of this.groundGraphicsObjects ?? []) g.destroy();
-    this.groundGraphicsObjects = [];
-    this.terrainWaveState = null; // reset so full rebuild picks fresh wave params
-
-    const points = this.generateTerrainHeights();
-    this.terrainPoints = points;
-    this.groundBodies = [];
-
-    for (let i = 0; i < points.length - 1; i++) {
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const segLength = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx);
-      const midX = (p1.x + p2.x) / 2;
-      const midY = (p1.y + p2.y) / 2;
-      const offset = GROUND_DEPTH / 2;
-      const cx = midX - Math.sin(angle) * offset;
-      const cy = midY + Math.cos(angle) * offset;
-
-      const body = this.matter.add.rectangle(cx, cy, segLength, GROUND_DEPTH, { isStatic: true });
-      this.matter.body.setAngle(body, angle);
-      body.label = 'ground';
-      this.groundBodies.push(body);
-    }
-
-    this.groundGraphicsObjects.push(this.drawGroundGraphicsSegment(points));
-  }
-
-  // Generates terrain heights for the full world. Amplitude ramps from near-zero
-  // at the left edge to full terrainAmplitude at the right, so the level reads
-  // as flat near the start and increasingly volatile further right.
-  generateTerrainHeights() {
-    const segments = Math.max(1, Math.round(this.worldWidth / TERRAIN_SEGMENT_WIDTH));
-    const maxAmplitude = this.terrainAmplitude;
-
-    // World-unit wavelengths so hill frequency is independent of world width.
-    const wavelength1 = 1800 + Math.random() * 1800; // 1800–3600 px per cycle
-    const wavelength2 = 900  + Math.random() * 600;  // 900–1500 px per cycle
-    const phase1 = Math.random() * Math.PI * 2;
-    const phase2 = Math.random() * Math.PI * 2;
-    const amp1Factor = 0.75 + Math.random() * 0.25;
-    const amp2Factor = 0.2 * Math.random();
-
-    const points = [];
-    for (let i = 0; i <= segments; i++) {
-      const x = (this.worldWidth * i) / segments;
-      const t = i / segments;
-      // Power curve: amplitude ramps from near-zero at left to full at right.
-      const xFraction = Math.pow(t, 1.3);
-      const amp1 = maxAmplitude * amp1Factor * xFraction;
-      const amp2 = maxAmplitude * amp2Factor * xFraction;
-      const y = Math.min(
-        GROUND_SURFACE_Y +
-          amp1 * Math.sin(x / wavelength1 * Math.PI * 2 + phase1) +
-          amp2 * Math.sin(x / wavelength2 * Math.PI * 2 + phase2),
-        WORLD_HEIGHT - 10,
-      );
-      points.push({ x, y });
-    }
-    return points;
-  }
-
-  // Draws terrain for the given points array and returns the Graphics object.
-  // The caller is responsible for positioning, animating, and tracking it.
-  drawGroundGraphicsSegment(points) {
-    const gfx = this.add.graphics().setDepth(1);
-
-    const splinePoints = points.map((p) => new Phaser.Math.Vector2(p.x, p.y));
-    const curve = new Phaser.Curves.Spline(splinePoints);
-    const smooth = curve.getPoints(Math.max(points.length * 8, 16));
-
-    const x0 = smooth[0].x;
-    const xEnd = smooth[smooth.length - 1].x;
-
-    gfx.fillStyle(0x4f7a3a, 1);
-    gfx.beginPath();
-    gfx.moveTo(x0, WORLD_HEIGHT);
-    for (const p of smooth) gfx.lineTo(p.x, p.y);
-    gfx.lineTo(xEnd, WORLD_HEIGHT);
-    gfx.closePath();
-    gfx.fillPath();
-
-    gfx.fillStyle(0x6fae4f, 1);
-    gfx.beginPath();
-    gfx.moveTo(smooth[0].x, smooth[0].y);
-    for (const p of smooth) gfx.lineTo(p.x, p.y);
-    for (let i = smooth.length - 1; i >= 0; i--) gfx.lineTo(smooth[i].x, smooth[i].y + 18);
-    gfx.closePath();
-    gfx.fillPath();
-
-    gfx.lineStyle(OUTLINE_WIDTH, OUTLINE, 1);
-    gfx.beginPath();
-    gfx.moveTo(smooth[0].x, smooth[0].y);
-    for (const p of smooth) gfx.lineTo(p.x, p.y);
-    gfx.strokePath();
-
-    return gfx;
   }
 
   celebrateGoal(x, y) {
@@ -1158,7 +896,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       const tooClose = (this.palmTrees || []).some((t) => Math.abs(t.x - x) < PALM_MIN_GAP);
       if (tooClose) continue;
 
-      const terrainY = this.getTerrainYAt(x);
+      const terrainY = this.terrain.getTerrainYAt(x);
       const finalY = terrainY + 80;
       const tree = this.add
         .image(x, animate ? finalY + 600 : finalY, 'palmtree')

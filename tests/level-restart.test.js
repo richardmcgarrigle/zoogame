@@ -21,6 +21,11 @@ function makeRestartScene(score = 5) {
 
   const fruitArrow = { setTint: vi.fn() };
 
+  const terrain = {
+    buildGround: vi.fn(),
+    getTerrainYAt: vi.fn(() => 850),
+  };
+
   const scene = {
     score,
     worldWidth: 1280,
@@ -29,7 +34,7 @@ function makeRestartScene(score = 5) {
     fruitArrow,
     crates: [crate],
     props: [fruit, crate],
-    buildGround: vi.fn(),
+    terrain,
     repositionGoal: vi.fn(),
     buildPlatforms: vi.fn(),
     buildPalms: vi.fn(),
@@ -42,13 +47,12 @@ function makeRestartScene(score = 5) {
       body: { label: 'crate' },
       destroy: vi.fn(),
     })),
-    getTerrainYAt: vi.fn(() => 850),
     matter: {
       body: { setAngularVelocity: vi.fn() },
     },
   };
 
-  return { scene, sprite, elephant };
+  return { scene, sprite, elephant, terrain };
 }
 
 describe('Feature: Level Restart', () => {
@@ -88,7 +92,7 @@ describe('Feature: Level Restart', () => {
       const { scene } = makeRestartScene();
       PlaygroundScene.prototype.restartLevel.call(scene);
 
-      expect(scene.buildGround).toHaveBeenCalled();
+      expect(scene.terrain.buildGround).toHaveBeenCalled();
     });
 
     it('rebuilds platforms', () => {
