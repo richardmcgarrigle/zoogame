@@ -82,6 +82,9 @@ const GOAL_FLASH_DURATION = 1200;   // ms total flash duration
 const GOAL_TEXT_FONT_SIZE = '120px';
 const GOAL_TEXT_STROKE = 10;
 
+// World extension animation
+const TERRAIN_SLIDE_DURATION = 700; // ms — new terrain chunk slides up from below
+
 // Palm tree placement
 const PALM_SPACING = 560;     // px between palm tree slots
 const PALM_JITTER = 90;       // px of random horizontal offset per slot
@@ -425,18 +428,19 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, -5000, this.worldWidth, WORLD_HEIGHT + 5000);
 
     // Extend terrain first so getTerrainYAt works for the new chunk.
-    this.extendTerrain(prevWidth, this.worldWidth);
+    const terrainTween = this.extendTerrain(prevWidth, this.worldWidth);
 
-    // Compute the goal's new position and slide it there.
+    // Slide the goal to its new position once the terrain reveal finishes.
     const newGoalX = this.worldWidth - 100;
     const newGoalY = this.getTerrainYAt(newGoalX) - TEXTURE_SIZES.goal.height / 2;
-    this.tweens.add({
-      targets: this.goal,
-      x: newGoalX,
-      y: newGoalY,
-      delay: 700,  // wait for terrain slide to finish
-      duration: 900,
-      ease: 'Power2.Out',
+    terrainTween.on('complete', () => {
+      this.tweens.add({
+        targets: this.goal,
+        x: newGoalX,
+        y: newGoalY,
+        duration: 900,
+        ease: 'Power2.Out',
+      });
     });
 
     // Seed placed bounds with the final goal position so platforms don't
@@ -490,13 +494,14 @@ export default class PlaygroundScene extends Phaser.Scene {
     // Slide the new section up from below for a smooth reveal.
     const chunkGfx = this.drawGroundGraphicsSegment(segPoints);
     chunkGfx.setPosition(0, 600);
-    this.tweens.add({
+    const slideTween = this.tweens.add({
       targets: chunkGfx,
       y: 0,
-      duration: 700,
+      duration: TERRAIN_SLIDE_DURATION,
       ease: 'Power2.Out',
     });
     (this.groundGraphicsObjects ??= []).push(chunkGfx);
+    return slideTween;
   }
 
   /**
@@ -1161,7 +1166,7 @@ export default class PlaygroundScene extends Phaser.Scene {
         .setScale(PALM_TREE_SCALE)
         .setDepth(0);
       if (animate) {
-        this.tweens.add({ targets: tree, y: finalY, duration: 700, ease: 'Power2.Out' });
+        this.tweens.add({ targets: tree, y: finalY, duration: TERRAIN_SLIDE_DURATION, ease: 'Power2.Out' });
       }
       this.palmTrees.push(tree);
     }
