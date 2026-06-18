@@ -4,9 +4,9 @@ import Elephant from '../objects/Elephant.js';
 import TouchControls from '../objects/TouchControls.js';
 import SoundManager from '../util/sounds.js';
 import TerrainManager from '../managers/TerrainManager.js';
+import PlatformSpawner from '../managers/PlatformSpawner.js';
 import {
   WORLD_HEIGHT,
-  GROUND_SURFACE_Y,
   AMPLITUDE_PER_SCORE,
   MAX_TERRAIN_AMPLITUDE,
   TERRAIN_SLIDE_DURATION,
@@ -24,42 +24,6 @@ import toucan2Url from '../assets/toucan_flying_2.png';
 const BASE_WORLD_WIDTH = () => window.innerWidth;
 
 const WIDTH_PER_SCORE = 300;
-
-const PLATFORM_MIN_SCALE = 0.6;
-const PLATFORM_MAX_SCALE = 1.4;
-const PLATFORM_ANGLE_PER_SCORE = 2;
-const PLATFORM_MIN_ANGLE = 8;
-const PLATFORM_MAX_ANGLE = 25;
-const PLATFORM_MARGIN_X = 150;
-const PLATFORM_MIN_Y = 250;
-// Elephant sprite is ~90px tall at BODY_SCALE; leave enough headroom below a
-// platform's lowest edge for it to walk underneath without colliding.
-const ELEPHANT_CLEARANCE = 110;
-const PLATFORM_MAX_Y = GROUND_SURFACE_Y - ELEPHANT_CLEARANCE - (TEXTURE_SIZES.platformLeaf.height * PLATFORM_MAX_SCALE) / 2;
-
-// Keep consecutive platforms within the elephant's jump reach.
-const PLATFORM_GAP_X_MIN = 100;
-const PLATFORM_GAP_X_MAX = 220;
-const PLATFORM_GAP_Y_MAX = 140;
-// Keep the first platform low enough that it's reachable with a jump straight
-// from the ground (no prior platform to hop from).
-const PLATFORM_GAP_Y_MIN_FROM_GROUND = 40;
-// Minimum gap left between a platform and the terrain/other platforms so
-// none of them visually or physically intersect.
-const PLATFORM_OVERLAP_BUFFER = 12;
-const PLATFORM_PLACEMENT_ATTEMPTS = 20;
-
-// Cluster-based platform spawning: mini-chunks decide whether to spawn a
-// cluster root, then recursively dress the cluster with children.
-const CLUSTER_MINI_CHUNK_WIDTH = 250;
-const CHUNK_CLUSTER_CHANCE_BASE = 0.35;
-const CHUNK_CLUSTER_CHANCE_PER_SCORE = 0.025;
-const CHUNK_CLUSTER_CHANCE_MAX = 0.65;
-const CLUSTER_SPREAD_BASE = 0.22;
-const CLUSTER_SPREAD_PER_SCORE = 0.03;
-const CLUSTER_SPREAD_MAX = 0.70;
-const CLUSTER_SPREAD_DECAY = 0.30; // factor per recursion depth
-const CLUSTER_MAX_DEPTH = 4;
 
 const FRUIT_SPAWN_X = 620;
 const FRUIT_SPAWN_Y = 850;
@@ -150,6 +114,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.worldWidth = BASE_WORLD_WIDTH();
 
     this.terrain = new TerrainManager(this);
+    this.platformSpawner = new PlatformSpawner(this, this.terrain);
 
     this.matter.world.setBounds(0, 0, this.worldWidth, WORLD_HEIGHT, 64, true, true, false, true);
 
@@ -157,9 +122,8 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.terrain.buildGround();
     const goalX = this.worldWidth - 100;
     this.goal = this.addGoal(goalX, this.terrain.getTerrainYAt(goalX) - TEXTURE_SIZES.goal.height / 2);
-    this.platforms = [];
     this.palmTrees = [];
-    this.buildPlatforms();
+    this.platformSpawner.buildPlatforms();
     this.buildPalms();
 
     this.fruit = this.addFruit(FRUIT_SPAWN_X, FRUIT_SPAWN_Y);
@@ -261,7 +225,7 @@ export default class PlaygroundScene extends Phaser.Scene {
   restartLevel() {
     this.terrain.buildGround();
     this.repositionGoal();
-    this.buildPlatforms();
+    this.platformSpawner.buildPlatforms();
     this.buildPalms();
 
     // Respawn props above the new terrain.
@@ -447,10 +411,10 @@ export default class PlaygroundScene extends Phaser.Scene {
       minY: newGoalY - TEXTURE_SIZES.goal.height / 2,
       maxY: newGoalY + TEXTURE_SIZES.goal.height / 2,
     }];
-    for (const p of this.platforms) {
-      placedBounds.push(this.getPlatformBounds(p.x, p.y, p.scaleX, p.angle));
+    for (const p of this.platformSpawner.platforms) {
+      placedBounds.push(this.platformSpawner.getPlatformBounds(p.x, p.y, p.scaleX, p.angle));
     }
-    this.buildPlatformsForChunk(prevWidth, this.worldWidth, placedBounds, true);
+    this.platformSpawner.buildPlatformsForChunk(prevWidth, this.worldWidth, placedBounds, true);
     this.buildPalmsForChunk(prevWidth, this.worldWidth, true);
   }
 
@@ -458,296 +422,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     const goalX = this.worldWidth - 100;
     const terrainY = this.terrain.getTerrainYAt(goalX);
     this.goal.setPosition(goalX, terrainY - TEXTURE_SIZES.goal.height / 2);
-  }
-
-  // Returns the AABB of the goal object, used to seed placedBounds.
-  getGoalBounds() {
-    const halfW = TEXTURE_SIZES.goal.width / 2;
-    const halfH = TEXTURE_SIZES.goal.height / 2;
-    return {
-      minX: this.goal.x - halfW,
-      maxX: this.goal.x + halfW,
-      minY: this.goal.y - halfH,
-      maxY: this.goal.y + halfH,
-    };
-  }
-
-  // Full platform rebuild for restartLevel. Destroys all existing platforms
-  // and regenerates across the whole world using the cluster approach.
-  buildPlatforms() {
-    if (this.platforms) {
-      for (const platform of this.platforms) {
-        this.matter.world.remove(platform.body);
-        platform.destroy();
-      }
-    }
-    this.platforms = [];
-    const placedBounds = [this.getGoalBounds()];
-    this.buildPlatformsForChunk(0, this.worldWidth, placedBounds);
-  }
-
-  // Spawns platform clusters within [startX, endX]. placedBounds is shared
-  // across all clusters so they avoid each other and the goal.
-  buildPlatformsForChunk(startX, endX, placedBounds, animate = false) {
-    const maxAngle = Math.min(this.score * PLATFORM_ANGLE_PER_SCORE, PLATFORM_MAX_ANGLE);
-    const miniChunkCount = Math.ceil((endX - startX) / CLUSTER_MINI_CHUNK_WIDTH);
-
-    for (let i = 0; i < miniChunkCount; i++) {
-      const miniStart = startX + i * CLUSTER_MINI_CHUNK_WIDTH;
-      const miniEnd = Math.min(miniStart + CLUSTER_MINI_CHUNK_WIDTH, endX);
-      const miniCenter = (miniStart + miniEnd) / 2;
-
-      // Scale cluster probability by x-position so the left side (near spawn)
-      // stays relatively clear and density builds toward the right.
-      const xFrac = Math.min(miniCenter / Math.max(this.worldWidth, 1), 1);
-      const clusterChance = Math.min(
-        (CHUNK_CLUSTER_CHANCE_BASE + this.score * CHUNK_CLUSTER_CHANCE_PER_SCORE) * (0.2 + 0.8 * xFrac),
-        CHUNK_CLUSTER_CHANCE_MAX,
-      );
-
-      if (Math.random() < clusterChance) {
-        const groundY = this.terrain.getTerrainYAt(miniCenter);
-        this.spawnPlatformCluster(miniCenter, groundY, miniStart, miniEnd, maxAngle, placedBounds, 0, animate);
-      }
-    }
-  }
-
-  /**
-   * Recursively places a cluster of platforms rooted near (anchorX, anchorY).
-   *
-   * Each call places one platform using a two-phase strategy:
-   *   1. Random sampling — tries PLATFORM_PLACEMENT_ATTEMPTS positions near the
-   *      anchor and keeps the one with the lowest overlap score.
-   *   2. Deterministic escape — calls resolveOverlap() to push the best candidate
-   *      out of terrain and sibling platforms along the four cardinal escape axes.
-   *
-   * After placing the root, it may recurse to spawn left, right, and upward
-   * neighbours. The `spreadChance` decays by CLUSTER_SPREAD_DECAY per depth level
-   * so clusters thin out naturally rather than requiring a hard max-count limit.
-   *
-   * @param {number}   anchorX      Target x for this platform.
-   * @param {number}   anchorY      Target y for this platform.
-   * @param {number}   chunkStartX  Left boundary of the mini-chunk (used only for context).
-   * @param {number}   chunkEndX    Right boundary of the mini-chunk.
-   * @param {number}   maxAngle     Maximum tilt angle in degrees at the current score.
-   * @param {object[]} placedBounds Shared AABB list; updated in-place as platforms land.
-   * @param {number}   depth        Current recursion depth (0 = cluster root).
-   * @param {boolean}  animate      If true, fade new platforms in rather than appearing instantly.
-   */
-  spawnPlatformCluster(anchorX, anchorY, chunkStartX, chunkEndX, maxAngle, placedBounds, depth, animate = false) {
-    if (depth > CLUSTER_MAX_DEPTH) return;
-
-    const scale = Phaser.Math.FloatBetween(PLATFORM_MIN_SCALE, PLATFORM_MAX_SCALE);
-    const effectiveMax = Math.max(maxAngle, PLATFORM_MIN_ANGLE);
-    const sign = Math.random() < 0.5 ? 1 : -1;
-    const angle = sign * Phaser.Math.Between(PLATFORM_MIN_ANGLE, effectiveMax);
-
-    const refBounds = this.getPlatformBounds(0, 0, scale, angle);
-    const rotatedHalfH = (refBounds.maxY - refBounds.minY) / 2;
-    // Use the actual terrain height at the anchor so platforms on slopes still
-    // leave enough clearance for the elephant to pass underneath.
-    const terrainAtAnchor = this.terrain.getTerrainYAt(anchorX);
-    const effectiveMaxY = terrainAtAnchor - ELEPHANT_CLEARANCE - rotatedHalfH;
-
-    // Constrain to world edges only; mini-chunk boundaries are just anchor hints.
-    const minX = PLATFORM_MARGIN_X;
-    const maxX = this.worldWidth - PLATFORM_MARGIN_X;
-    if (minX >= maxX) return;
-
-    // Root platforms sit above ground; children float near their parent.
-    let targetY;
-    if (depth === 0) {
-      const groundAtAnchor = this.terrain.getTerrainYAt(anchorX);
-      targetY = groundAtAnchor - Phaser.Math.Between(PLATFORM_GAP_Y_MIN_FROM_GROUND, PLATFORM_GAP_Y_MAX);
-    } else {
-      targetY = anchorY + Phaser.Math.Between(-PLATFORM_GAP_Y_MAX, PLATFORM_GAP_Y_MAX);
-    }
-    targetY = Phaser.Math.Clamp(targetY, PLATFORM_MIN_Y, effectiveMaxY);
-
-    // Find best candidate position near (anchorX, targetY).
-    let bestX = null, bestY = null, bestBounds = null, bestOverlap = Infinity;
-    const xSpread = PLATFORM_GAP_X_MAX * 0.4;
-    for (let attempt = 0; attempt < PLATFORM_PLACEMENT_ATTEMPTS; attempt++) {
-      const cx = Phaser.Math.Clamp(
-        anchorX + Phaser.Math.Between(-xSpread, xSpread),
-        minX, maxX,
-      );
-      const cy = Phaser.Math.Clamp(
-        targetY + Phaser.Math.Between(-20, 20),
-        PLATFORM_MIN_Y, effectiveMaxY,
-      );
-      const bounds = this.getPlatformBounds(cx, cy, scale, angle);
-      const overlap = this.platformOverlapAmount(bounds, placedBounds);
-      if (overlap === 0) { bestX = cx; bestY = cy; bestBounds = bounds; break; }
-      if (overlap < bestOverlap) { bestOverlap = overlap; bestX = cx; bestY = cy; bestBounds = bounds; }
-    }
-    if (bestX === null) return;
-
-    const resolved = this.resolveOverlap(bestX, bestY, scale, angle, placedBounds, minX, maxX, effectiveMaxY);
-    if (this.platformOverlapAmount(resolved.bounds, placedBounds) > 500) return;
-
-    placedBounds.push(resolved.bounds);
-    const platform = this.addStaticPlatform(resolved.x, resolved.y, 'platformLeaf');
-    platform.setScale(scale);
-    platform.setAngle(angle);
-    this.platforms.push(platform);
-
-    if (animate) {
-      platform.setAlpha(0);
-      this.tweens.add({ targets: platform, alpha: 1, duration: 600, ease: 'Power2.Out' });
-    }
-
-    // Spread to neighbouring platforms with probability decaying by depth.
-    const spreadChance = Math.min(
-      CLUSTER_SPREAD_BASE + this.score * CLUSTER_SPREAD_PER_SCORE,
-      CLUSTER_SPREAD_MAX,
-    ) * Math.pow(1 - CLUSTER_SPREAD_DECAY, depth);
-
-    if (spreadChance < 0.02) return;
-
-    const px = resolved.x;
-    const py = resolved.y;
-
-    // Right neighbour
-    if (Math.random() < spreadChance) {
-      const nx = px + Phaser.Math.Between(PLATFORM_GAP_X_MIN, PLATFORM_GAP_X_MAX);
-      const ny = py + Phaser.Math.Between(-PLATFORM_GAP_Y_MAX / 2, PLATFORM_GAP_Y_MAX / 2);
-      if (nx < maxX) {
-        this.spawnPlatformCluster(nx, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1, animate);
-      }
-    }
-    // Left neighbour
-    if (Math.random() < spreadChance * 0.7) {
-      const nx = px - Phaser.Math.Between(PLATFORM_GAP_X_MIN, PLATFORM_GAP_X_MAX);
-      const ny = py + Phaser.Math.Between(-PLATFORM_GAP_Y_MAX / 2, PLATFORM_GAP_Y_MAX / 2);
-      if (nx > minX) {
-        this.spawnPlatformCluster(nx, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1, animate);
-      }
-    }
-    // Stack above (only shallow depths to prevent infinitely tall towers)
-    if (depth < 2 && Math.random() < spreadChance * 0.5) {
-      const ny = py - Phaser.Math.Between(PLATFORM_GAP_Y_MIN_FROM_GROUND, PLATFORM_GAP_Y_MAX);
-      if (ny > PLATFORM_MIN_Y) {
-        this.spawnPlatformCluster(px, ny, chunkStartX, chunkEndX, maxAngle, placedBounds, depth + 1, animate);
-      }
-    }
-  }
-
-  /**
-   * Pushes a candidate platform position clear of the terrain and all sibling
-   * platform bounds using a two-phase iterative escape algorithm.
-   *
-   * Each iteration:
-   *   1. Ground check — if the platform's bottom edge is too close to the terrain
-   *      (within ELEPHANT_CLEARANCE), moves it straight up.
-   *   2. Sibling check — finds the sibling with the highest overlap score, then
-   *      tries four escape positions (above/below/left/right the sibling centre)
-   *      and moves to whichever has the lowest resulting overlap.
-   *
-   * The loop exits early when no overlap remains.  If the 30-iteration limit is
-   * reached without convergence the best position found so far is returned;
-   * spawnPlatformCluster then discards it if residual overlap exceeds 500 px².
-   *
-   * @param {number}   candX        Starting candidate x.
-   * @param {number}   candY        Starting candidate y.
-   * @param {number}   scale        Platform scale factor.
-   * @param {number}   angle        Platform tilt angle in degrees.
-   * @param {object[]} placedBounds Existing platform AABBs to avoid.
-   * @param {number}   minX         Left world boundary for clamping.
-   * @param {number}   maxX         Right world boundary for clamping.
-   * @param {number}   effectiveMaxY  Lowest allowed y (accounts for terrain slope at anchor).
-   * @returns {{ x: number, y: number, bounds: object }} Resolved position and its AABB.
-   */
-  resolveOverlap(candX, candY, scale, angle, placedBounds, minX, maxX, effectiveMaxY) {
-    let cx = candX, cy = candY;
-    let bounds = this.getPlatformBounds(cx, cy, scale, angle);
-
-    for (let iter = 0; iter < 30; iter++) {
-      const groundY = this.terrain.minTerrainYInRange(bounds.minX, bounds.maxX);
-      const groundPenetration = bounds.maxY + ELEPHANT_CLEARANCE - groundY;
-      if (groundPenetration > 0) {
-        const newY = Phaser.Math.Clamp(cy - groundPenetration, PLATFORM_MIN_Y, effectiveMaxY);
-        if (newY === cy) break;
-        cy = newY;
-        bounds = this.getPlatformBounds(cx, cy, scale, angle);
-        continue;
-      }
-
-      let culprit = null, culpritScore = 0;
-      for (const other of placedBounds) {
-        const xOverlap = Math.min(bounds.maxX, other.maxX) - Math.max(bounds.minX, other.minX) + PLATFORM_OVERLAP_BUFFER;
-        const yOverlap = Math.min(bounds.maxY, other.maxY) - Math.max(bounds.minY, other.minY);
-        if (xOverlap > 0 && yOverlap > -ELEPHANT_CLEARANCE) {
-          const s = xOverlap * (yOverlap + ELEPHANT_CLEARANCE);
-          if (s > culpritScore) { culprit = { other, xOverlap, yOverlap }; culpritScore = s; }
-        }
-      }
-      if (!culprit) break;
-
-      const candHalfH = (bounds.maxY - bounds.minY) / 2;
-      const candHalfW = (bounds.maxX - bounds.minX) / 2;
-      const otherHalfH = (culprit.other.maxY - culprit.other.minY) / 2;
-      const otherHalfW = (culprit.other.maxX - culprit.other.minX) / 2;
-      const otherCX = (culprit.other.minX + culprit.other.maxX) / 2;
-      const otherCY = (culprit.other.minY + culprit.other.maxY) / 2;
-      const sepY = otherHalfH + candHalfH + ELEPHANT_CLEARANCE;
-      const sepX = otherHalfW + candHalfW + PLATFORM_OVERLAP_BUFFER;
-
-      const escapes = [
-        { x: cx, y: Phaser.Math.Clamp(otherCY + sepY, PLATFORM_MIN_Y, effectiveMaxY) },
-        { x: cx, y: Phaser.Math.Clamp(otherCY - sepY, PLATFORM_MIN_Y, effectiveMaxY) },
-        { x: Phaser.Math.Clamp(otherCX + sepX, minX, maxX), y: cy },
-        { x: Phaser.Math.Clamp(otherCX - sepX, minX, maxX), y: cy },
-      ];
-
-      let bestEscape = null, bestEscapeOverlap = Infinity, bestEscapeBounds = null;
-      for (const esc of escapes) {
-        if (esc.x === cx && esc.y === cy) continue;
-        const eb = this.getPlatformBounds(esc.x, esc.y, scale, angle);
-        const eo = this.platformOverlapAmount(eb, placedBounds);
-        if (eo < bestEscapeOverlap) { bestEscapeOverlap = eo; bestEscape = esc; bestEscapeBounds = eb; }
-      }
-      if (!bestEscape) break;
-      cx = bestEscape.x; cy = bestEscape.y; bounds = bestEscapeBounds;
-    }
-
-    return { x: cx, y: cy, bounds };
-  }
-
-  // Axis-aligned bounding box of a platform, accounting for its rotation.
-  getPlatformBounds(x, y, scale, angleDeg) {
-    const w = TEXTURE_SIZES.platformLeaf.width * scale;
-    const h = TEXTURE_SIZES.platformLeaf.height * scale;
-    const rad = Phaser.Math.DEG_TO_RAD * angleDeg;
-    const cos = Math.abs(Math.cos(rad));
-    const sin = Math.abs(Math.sin(rad));
-    const halfW = (w * cos + h * sin) / 2;
-    const halfH = (w * sin + h * cos) / 2;
-    return { minX: x - halfW, maxX: x + halfW, minY: y - halfH, maxY: y + halfH };
-  }
-
-  // Returns 0 if `bounds` clears the terrain and all `others` by at least
-  // ELEPHANT_CLEARANCE; positive "how bad" score otherwise.
-  platformOverlapAmount(bounds, others) {
-    let overlap = 0;
-
-    // Platform's bottom edge must be at least ELEPHANT_CLEARANCE above ground.
-    // Sample the terrain densely across the full platform width to catch peaks.
-    const groundY = this.terrain.minTerrainYInRange(bounds.minX, bounds.maxX);
-    const groundPenetration = bounds.maxY + ELEPHANT_CLEARANCE - groundY;
-    if (groundPenetration > 0) overlap += groundPenetration;
-
-    for (const other of others) {
-      const xOverlap = Math.min(bounds.maxX, other.maxX) - Math.max(bounds.minX, other.minX) + PLATFORM_OVERLAP_BUFFER;
-      // yOverlap > 0 → physical intersection; yOverlap in (-ELEPHANT_CLEARANCE, 0] →
-      // platforms clear each other but the gap is too tight for the elephant to fit.
-      const yOverlap = Math.min(bounds.maxY, other.maxY) - Math.max(bounds.minY, other.minY);
-      if (xOverlap > 0 && yOverlap > -ELEPHANT_CLEARANCE) {
-        overlap += xOverlap * (yOverlap + ELEPHANT_CLEARANCE);
-      }
-    }
-
-    return overlap;
   }
 
   // Moves a sprite up so its bottom edge clears the terrain surface at its x.
@@ -779,13 +453,6 @@ export default class PlaygroundScene extends Phaser.Scene {
         onComplete: () => star.destroy(),
       });
     }
-  }
-
-  addStaticPlatform(x, y, textureKey) {
-    const platform = this.matter.add.image(x, y, textureKey, null, { isStatic: true });
-    platform.body.label = 'platform';
-    platform.setDepth(3);
-    return platform;
   }
 
   addFruit(x, y, type = 'orange') {
@@ -875,8 +542,8 @@ export default class PlaygroundScene extends Phaser.Scene {
   // Adds palm trees for the [startX, endX] range, avoiding platform bands
   // and keeping a minimum gap from every already-placed tree.
   buildPalmsForChunk(startX, endX, animate = false) {
-    const platformBands = (this.platforms || []).map((p) => {
-      const b = this.getPlatformBounds(p.x, p.y, p.scaleX, p.angle);
+    const platformBands = (this.platformSpawner.platforms || []).map((p) => {
+      const b = this.platformSpawner.getPlatformBounds(p.x, p.y, p.scaleX, p.angle);
       return { minX: b.minX - PALM_TREE_MARGIN, maxX: b.maxX + PALM_TREE_MARGIN };
     });
 
