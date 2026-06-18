@@ -287,6 +287,16 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.elephant.groundContacts = 0;
   }
 
+  /**
+   * Amplifies the fruit's rebound velocity after a platform collision.
+   *
+   * By the time this is called Matter has already resolved the collision and the
+   * fruit is moving away from the surface (vy < 0 for top-face hits, vy > 0 for
+   * underside hits).  We scale that existing velocity up and enforce a floor so
+   * even slow-moving fruit gets a satisfying spring effect.
+   *
+   * @param {MatterJS.Body} fruitBody  The fruit's physics body.
+   */
   bounceFruitOffPlatform(fruitBody) {
     const vy = fruitBody.velocity.y;
     // After Matter resolves the collision the ball is already moving away from
@@ -489,8 +499,27 @@ export default class PlaygroundScene extends Phaser.Scene {
     (this.groundGraphicsObjects ??= []).push(chunkGfx);
   }
 
-  // Generates terrain heights for a single chunk [startX, endX], blending
-  // smoothly from startY at the left edge into the chunk's wave profile.
+  /**
+   * Generates terrain height samples for a single world chunk [startX, endX].
+   *
+   * The chunk is driven by a dual-sine wave (two overlapping frequencies) whose
+   * parameters are stored in `this.terrainWaveState`. On the first call the state
+   * is initialised from scratch; on subsequent calls it is slowly drifted toward
+   * new random targets (25 % blend per chunk) so adjacent chunks share a family
+   * resemblance rather than being completely independent.
+   *
+   * Phases are intentionally left unchanged between chunks — because the sine is
+   * evaluated at absolute x coordinates the wave is automatically continuous
+   * across the seam without any explicit blending of phase values.
+   *
+   * The first BLEND_SEGS segments linearly interpolate from startY to the wave
+   * target so the junction with the previous chunk is seamless.
+   *
+   * @param {number} startX  Left edge of the chunk in world pixels.
+   * @param {number} endX    Right edge of the chunk in world pixels.
+   * @param {number} startY  Ground y-value at the left edge (last point of previous chunk).
+   * @returns {{ x: number, y: number }[]} Array of sampled terrain points.
+   */
   generateChunkTerrainHeights(startX, endX, startY) {
     const chunkWidth = endX - startX;
     const segments = Math.max(1, Math.round(chunkWidth / TERRAIN_SEGMENT_WIDTH));
@@ -606,8 +635,28 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
   }
 
-  // Recursively places a platform near (anchorX, anchorY) then dresses it
-  // with child platforms at decreasing probability per depth level.
+  /**
+   * Recursively places a cluster of platforms rooted near (anchorX, anchorY).
+   *
+   * Each call places one platform using a two-phase strategy:
+   *   1. Random sampling — tries PLATFORM_PLACEMENT_ATTEMPTS positions near the
+   *      anchor and keeps the one with the lowest overlap score.
+   *   2. Deterministic escape — calls resolveOverlap() to push the best candidate
+   *      out of terrain and sibling platforms along the four cardinal escape axes.
+   *
+   * After placing the root, it may recurse to spawn left, right, and upward
+   * neighbours. The `spreadChance` decays by CLUSTER_SPREAD_DECAY per depth level
+   * so clusters thin out naturally rather than requiring a hard max-count limit.
+   *
+   * @param {number}   anchorX      Target x for this platform.
+   * @param {number}   anchorY      Target y for this platform.
+   * @param {number}   chunkStartX  Left boundary of the mini-chunk (used only for context).
+   * @param {number}   chunkEndX    Right boundary of the mini-chunk.
+   * @param {number}   maxAngle     Maximum tilt angle in degrees at the current score.
+   * @param {object[]} placedBounds Shared AABB list; updated in-place as platforms land.
+   * @param {number}   depth        Current recursion depth (0 = cluster root).
+   * @param {boolean}  animate      If true, fade new platforms in rather than appearing instantly.
+   */
   spawnPlatformCluster(anchorX, anchorY, chunkStartX, chunkEndX, maxAngle, placedBounds, depth, animate = false) {
     if (depth > CLUSTER_MAX_DEPTH) return;
 
@@ -707,8 +756,31 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
   }
 
-  // Pushes a candidate platform position out of terrain and other platforms.
-  // Mirrors the resolution loop from the old buildPlatforms chain.
+  /**
+   * Pushes a candidate platform position clear of the terrain and all sibling
+   * platform bounds using a two-phase iterative escape algorithm.
+   *
+   * Each iteration:
+   *   1. Ground check — if the platform's bottom edge is too close to the terrain
+   *      (within ELEPHANT_CLEARANCE), moves it straight up.
+   *   2. Sibling check — finds the sibling with the highest overlap score, then
+   *      tries four escape positions (above/below/left/right the sibling centre)
+   *      and moves to whichever has the lowest resulting overlap.
+   *
+   * The loop exits early when no overlap remains.  If the 30-iteration limit is
+   * reached without convergence the best position found so far is returned;
+   * spawnPlatformCluster then discards it if residual overlap exceeds 500 px².
+   *
+   * @param {number}   candX        Starting candidate x.
+   * @param {number}   candY        Starting candidate y.
+   * @param {number}   scale        Platform scale factor.
+   * @param {number}   angle        Platform tilt angle in degrees.
+   * @param {object[]} placedBounds Existing platform AABBs to avoid.
+   * @param {number}   minX         Left world boundary for clamping.
+   * @param {number}   maxX         Right world boundary for clamping.
+   * @param {number}   effectiveMaxY  Lowest allowed y (accounts for terrain slope at anchor).
+   * @returns {{ x: number, y: number, bounds: object }} Resolved position and its AABB.
+   */
   resolveOverlap(candX, candY, scale, angle, placedBounds, minX, maxX, effectiveMaxY) {
     let cx = candX, cy = candY;
     let bounds = this.getPlatformBounds(cx, cy, scale, angle);
@@ -1143,6 +1215,20 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Advances all bird sprites by one frame.
+   *
+   * Each bird:
+   * - Moves horizontally at its own speed and gently bobs vertically.
+   * - Alternates between toucan_1 and toucan_2 textures at BIRD_FLAP_INTERVAL ms
+   *   per frame to simulate wing flapping.
+   * - Wraps to the opposite edge of the camera view when it flies off-screen.
+   * - After a cooldown, applies a small impulse to the fruit when the bird flies
+   *   within HIT_RADIUS of it, making the fruit feel like a live environment
+   *   rather than a static prop.
+   *
+   * @param {number} delta  Frame delta in milliseconds.
+   */
   updateBirds(delta) {
     const cam = this.cameras.main;
     const viewLeft  = cam.scrollX - 100;
