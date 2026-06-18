@@ -23,6 +23,18 @@ Update `docs/USE_CASES.md` in the same commit as the code change — never leave
 
 When adding new functionality, write tests that cover the new code. Maintain a minimum of 80% code coverage across the codebase. Run the test suite after making changes to confirm coverage does not drop below this threshold.
 
+## Refactoring
+
+After committing a change, consider whether any refactoring opportunities are worth acting on. Look at the modified code and its related files:
+
+- Does the change reveal duplication that a shared base class or mixin could eliminate?
+- Would extracting a new class clarify responsibilities and make the code easier to extend (Single Responsibility, Open/Closed)?
+- Do related classes now share enough behavior that an interface or abstract base makes sense (Liskov, Interface Segregation)?
+- Are there dependencies that should be injected rather than hard-coded (Dependency Inversion)?
+- Is any class or function now doing too much and ready to be split?
+
+If a refactor is low-risk and self-contained, do it immediately in a follow-up commit. If it is larger, spawn a task chip so it is not forgotten. Never refactor and add features in the same commit.
+
 ## Agents
 
 Always use `isolation: "worktree"` when spawning agents.
