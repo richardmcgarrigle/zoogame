@@ -1,0 +1,10 @@
+#!/bin/sh
+# Run the test suite before every commit. A failing test blocks the commit.
+echo "Running tests before commit..."
+npm test
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "Commit blocked: tests failed. Fix the failures and try again."
+  exit 1
+fi
+echo "All tests passed. Proceeding with commit."
