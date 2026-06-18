@@ -76,6 +76,22 @@ const WALL_BOUNCE_MIN_SPEED = 4;
 const FRUIT_IDLE_SPEED_THRESHOLD = 0.8; // px/frame — below this counts as stuck
 const FRUIT_IDLE_RESPAWN_DELAY = 10;    // seconds before auto-respawn
 
+// Goal animation
+const GOAL_FLASH_INTERVAL = 120;    // ms between score text flash toggles
+const GOAL_FLASH_DURATION = 1200;   // ms total flash duration
+const GOAL_TEXT_FONT_SIZE = '120px';
+const GOAL_TEXT_STROKE = 10;
+
+// Palm tree placement
+const PALM_SPACING = 560;     // px between palm tree slots
+const PALM_JITTER = 90;       // px of random horizontal offset per slot
+const PALM_TREE_SCALE = 0.30;
+const PALM_TREE_MARGIN = 60;  // px clearance around platform bands
+const PALM_MIN_GAP = 300;     // minimum x distance between any two trees
+
+// Bird animation
+const BIRD_FLAP_INTERVAL = 180; // ms per frame
+
 // Fruit types available for random spawning. Melon is rarer and heavier.
 const FRUIT_CONFIGS = {
   orange: { key: 'orange', density: 0.0006, arrowTint: 0xff8c3c },
@@ -301,7 +317,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     // Flash the score text
     let flashes = 0;
     const flashTimer = this.time.addEvent({
-      delay: 120,
+      delay: GOAL_FLASH_INTERVAL,
       repeat: 9,
       callback: () => {
         flashes++;
@@ -309,7 +325,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       },
       callbackScope: this,
     });
-    this.time.delayedCall(1200, () => {
+    this.time.delayedCall(GOAL_FLASH_DURATION, () => {
       flashTimer.remove();
       this.scoreText.setVisible(true);
     });
@@ -319,10 +335,10 @@ export default class PlaygroundScene extends Phaser.Scene {
     const goalLabel = this.add
       .text(width / 2, height / 2, 'GOAL!', {
         fontFamily: 'Impact, "Arial Black", sans-serif',
-        fontSize: '120px',
+        fontSize: GOAL_TEXT_FONT_SIZE,
         color: '#ffffff',
         stroke: '#e63c00',
-        strokeThickness: 10,
+        strokeThickness: GOAL_TEXT_STROKE,
         shadow: { offsetX: 4, offsetY: 4, color: '#000', blur: 8, fill: true },
       })
       .setOrigin(0.5)
@@ -1044,21 +1060,17 @@ export default class PlaygroundScene extends Phaser.Scene {
   // Adds palm trees for the [startX, endX] range, avoiding platform bands
   // and keeping a minimum gap from every already-placed tree.
   buildPalmsForChunk(startX, endX, animate = false) {
-    const TREE_SCALE = 0.30;
-    const TREE_MARGIN = 60;
-    const TREE_MIN_GAP = 300; // minimum x distance between any two trees
     const platformBands = (this.platforms || []).map((p) => {
       const b = this.getPlatformBounds(p.x, p.y, p.scaleX, p.angle);
-      return { minX: b.minX - TREE_MARGIN, maxX: b.maxX + TREE_MARGIN };
+      return { minX: b.minX - PALM_TREE_MARGIN, maxX: b.maxX + PALM_TREE_MARGIN };
     });
 
-    const spacing = 560;
-    const firstI = Math.floor(startX / spacing);
-    const lastI = Math.ceil(endX / spacing) + 1;
+    const firstI = Math.floor(startX / PALM_SPACING);
+    const lastI = Math.ceil(endX / PALM_SPACING) + 1;
 
     for (let i = firstI; i <= lastI; i++) {
       const x = Phaser.Math.Clamp(
-        60 + i * spacing + Phaser.Math.Between(-90, 90),
+        60 + i * PALM_SPACING + Phaser.Math.Between(-PALM_JITTER, PALM_JITTER),
         startX + 20,
         endX - 20,
       );
@@ -1066,7 +1078,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       const blocked = platformBands.some((b) => x >= b.minX && x <= b.maxX);
       if (blocked) continue;
 
-      const tooClose = (this.palmTrees || []).some((t) => Math.abs(t.x - x) < TREE_MIN_GAP);
+      const tooClose = (this.palmTrees || []).some((t) => Math.abs(t.x - x) < PALM_MIN_GAP);
       if (tooClose) continue;
 
       const terrainY = this.getTerrainYAt(x);
@@ -1074,7 +1086,7 @@ export default class PlaygroundScene extends Phaser.Scene {
       const tree = this.add
         .image(x, animate ? finalY + 600 : finalY, 'palmtree')
         .setOrigin(0.5, 1)
-        .setScale(TREE_SCALE)
+        .setScale(PALM_TREE_SCALE)
         .setDepth(0);
       if (animate) {
         this.tweens.add({ targets: tree, y: finalY, duration: 700, ease: 'Power2.Out' });
@@ -1142,7 +1154,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     const HIT_RADIUS = 44;
     const BIRD_FORCE_X = 9;
     const BIRD_FORCE_Y = -5;
-    const FLAP_INTERVAL = 180; // ms per frame
 
     for (const bird of this.birds) {
       // Move horizontally.
@@ -1152,8 +1163,8 @@ export default class PlaygroundScene extends Phaser.Scene {
 
       // Flap animation: alternate between the two toucan frames.
       bird._flapTimer += delta;
-      if (bird._flapTimer >= FLAP_INTERVAL) {
-        bird._flapTimer -= FLAP_INTERVAL;
+      if (bird._flapTimer >= BIRD_FLAP_INTERVAL) {
+        bird._flapTimer -= BIRD_FLAP_INTERVAL;
         bird._flapFrame = 1 - bird._flapFrame;
         bird.setTexture(bird._flapFrame === 0 ? 'toucan_1' : 'toucan_2');
       }

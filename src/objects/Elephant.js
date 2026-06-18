@@ -18,6 +18,24 @@ const WIND_STREAK_SPEED = 280;
 const WIND_STREAK_LEN_MIN = 35;
 const WIND_STREAK_LEN_MAX = 100;
 
+// Lerp coefficient for smoothly matching sprite rotation to surface angle.
+// Lower = smoother/slower tilt; higher = snappier response.
+const SURFACE_ANGLE_LERP = 0.18;
+
+// Standard Gamepad / DualSense button indices
+const PAD_BTN_CROSS    = 0;
+const PAD_BTN_CIRCLE   = 1;
+const PAD_BTN_SQUARE   = 2;
+const PAD_BTN_TRIANGLE = 3;
+const PAD_BTN_L1       = 4;
+const PAD_BTN_R1       = 5;
+const PAD_BTN_L2       = 6;
+const PAD_BTN_R2       = 7;
+const PAD_BTN_D_UP     = 12;
+const PAD_BTN_D_DOWN   = 13;
+const PAD_BTN_D_LEFT   = 14;
+const PAD_BTN_D_RIGHT  = 15;
+
 export default class Elephant {
   constructor(scene, x, y) {
     this.scene = scene;
@@ -147,20 +165,20 @@ export default class Elephant {
     if (!isFrozen) {
       const touch = this.scene.touchControls;
       const left = this.cursors.left.isDown || this.keys.A.isDown ||
-        pads.some(p => padPressed(p, 14) || stickX(p) < -STICK_DEAD) ||
+        pads.some(p => padPressed(p, PAD_BTN_D_LEFT) || stickX(p) < -STICK_DEAD) ||
         (touch?.left ?? false);
       const right = this.cursors.right.isDown || this.keys.D.isDown ||
-        pads.some(p => padPressed(p, 15) || stickX(p) > STICK_DEAD) ||
+        pads.some(p => padPressed(p, PAD_BTN_D_RIGHT) || stickX(p) > STICK_DEAD) ||
         (touch?.right ?? false);
       const jumpPressed =
         Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
         Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
         Phaser.Input.Keyboard.JustDown(this.keys.W) ||
-        pads.some(p => padJustDown(p, 0) || padJustDown(p, 12)) ||
+        pads.some(p => padJustDown(p, PAD_BTN_CROSS) || padJustDown(p, PAD_BTN_D_UP)) ||
         (touch?.jumpJustPressed ?? false);
       const dashHeld =
         this.cursors.shift?.isDown ||
-        pads.some(p => padPressed(p, 2)) ||
+        pads.some(p => padPressed(p, PAD_BTN_SQUARE)) ||
         (touch?.dashHeld ?? false);
 
       // --- Dash (hold to sustain) ---
@@ -284,7 +302,7 @@ export default class Elephant {
       targetAngle = sum / this.contactBodies.size;
       targetAngle = Phaser.Math.Clamp(targetAngle, -0.61, 0.61);
     }
-    this.surfaceAngle += (targetAngle - this.surfaceAngle) * 0.18;
+    this.surfaceAngle += (targetAngle - this.surfaceAngle) * SURFACE_ANGLE_LERP;
     this.sprite.rotation = this.surfaceAngle;
   }
 

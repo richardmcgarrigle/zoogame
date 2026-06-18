@@ -1,3 +1,8 @@
+// Minimum computed volume below which bounce sounds are skipped (avoids near-silent pops).
+const BOUNCE_VOL_FLOOR = 0.05;
+// Master volume scale applied to all sounds. Raise to make the game louder overall.
+const MASTER_VOLUME = 1.0;
+
 export default class SoundManager {
   constructor(audioContext) {
     this.ctx = audioContext;
@@ -7,8 +12,8 @@ export default class SoundManager {
   playBounce(velocityMagnitude = 5) {
     const ctx = this.ctx;
     const t = ctx.currentTime;
-    const vol = Math.min(velocityMagnitude / 12, 1) * 0.55;
-    if (vol < 0.05) return;
+    const vol = Math.min(velocityMagnitude / 12, 1) * 0.55 * MASTER_VOLUME;
+    if (vol < BOUNCE_VOL_FLOOR) return;
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
