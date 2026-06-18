@@ -15,12 +15,13 @@
  * jump button (mirrors JustDown keyboard behaviour).
  */
 
-const STICK_BASE_RADIUS  = 50;
-const STICK_THUMB_RADIUS = 28;
-const STICK_MAX_TRAVEL   = 48;   // max px thumb can move from base
-const STICK_DEAD_ZONE    = 12;   // px dead zone before left/right activates
-const STICK_BASE_ALPHA   = 0.30;
-const STICK_THUMB_ALPHA  = 0.65;
+const STICK_BASE_RADIUS   = 85;
+const STICK_THUMB_RADIUS  = 28;
+const STICK_MAX_TRAVEL    = 80;   // max px thumb can move from base
+const STICK_DEAD_ZONE     = 12;   // px dead zone before left/right activates
+const STICK_DASH_THRESHOLD = 56;  // px beyond which drag activates dash
+const STICK_BASE_ALPHA    = 0.30;
+const STICK_THUMB_ALPHA   = 0.65;
 
 const BTN_SIZE   = 70;
 const BTN_MARGIN = 20;
@@ -95,18 +96,25 @@ export default class TouchControls {
     this._stickContainer.setVisible(visible);
   }
 
-  _drawStick(thumbX, thumbY) {
+  _drawStick(thumbX, thumbY, dashing) {
     const bx = this._stickBase.x;
     const by = this._stickBase.y;
 
     this._stickBaseGfx.clear();
-    this._stickBaseGfx.lineStyle(3, 0xffffff, STICK_BASE_ALPHA + 0.2);
-    this._stickBaseGfx.strokeCircle(bx, by, STICK_BASE_RADIUS);
-    this._stickBaseGfx.fillStyle(0xffffff, STICK_BASE_ALPHA);
+    // Outer ring (dash zone boundary)
+    this._stickBaseGfx.fillStyle(0xff8822, STICK_BASE_ALPHA * 0.8);
     this._stickBaseGfx.fillCircle(bx, by, STICK_BASE_RADIUS);
+    this._stickBaseGfx.lineStyle(2, 0xff8822, 0.5);
+    this._stickBaseGfx.strokeCircle(bx, by, STICK_BASE_RADIUS);
+    // Inner ring (walk zone)
+    this._stickBaseGfx.fillStyle(0xffffff, STICK_BASE_ALPHA);
+    this._stickBaseGfx.fillCircle(bx, by, STICK_DASH_THRESHOLD);
+    this._stickBaseGfx.lineStyle(2, 0xffffff, 0.5);
+    this._stickBaseGfx.strokeCircle(bx, by, STICK_DASH_THRESHOLD);
 
+    const thumbColor = dashing ? 0xff8822 : 0x3399ff;
     this._stickThumbGfx.clear();
-    this._stickThumbGfx.fillStyle(0x3399ff, STICK_THUMB_ALPHA);
+    this._stickThumbGfx.fillStyle(thumbColor, STICK_THUMB_ALPHA);
     this._stickThumbGfx.fillCircle(thumbX, thumbY, STICK_THUMB_RADIUS);
     this._stickThumbGfx.lineStyle(2, 0xffffff, 0.8);
     this._stickThumbGfx.strokeCircle(thumbX, thumbY, STICK_THUMB_RADIUS);
@@ -121,7 +129,9 @@ export default class TouchControls {
     const tx = this._stickBase.x + Math.cos(angle) * clamp;
     const ty = this._stickBase.y + Math.sin(angle) * clamp;
 
-    this._drawStick(tx, ty);
+    const dashing = dist >= STICK_DASH_THRESHOLD;
+    this.dashHeld = dashing;
+    this._drawStick(tx, ty, dashing);
 
     const hx = tx - this._stickBase.x;
     this.left  = hx < -STICK_DEAD_ZONE;
@@ -131,7 +141,7 @@ export default class TouchControls {
   _startStick(px, py) {
     this._stickBase = { x: px, y: py };
     this._setStickVisible(true);
-    this._drawStick(px, py);
+    this._drawStick(px, py, false);
     this.left  = false;
     this.right = false;
   }
@@ -139,8 +149,9 @@ export default class TouchControls {
   _endStick() {
     this._stickPointerId = null;
     this._setStickVisible(false);
-    this.left  = false;
-    this.right = false;
+    this.left     = false;
+    this.right    = false;
+    this.dashHeld = false;
   }
 
   // ---------------------------------------------------------------------------

@@ -351,6 +351,20 @@
 - Given the touch thumb is within 12px of the stick base
 - Then no horizontal movement is registered
 
+**Scenario: Stick dash zone activates dash**
+- Given the touch is displaced 56px or more from the stick base
+- Then the elephant dashes (dashHeld is true) for as long as the drag remains in the outer zone
+- And the stick thumb turns orange to indicate dash mode
+
+**Scenario: Stick returns to walk when pulled back inside dash threshold**
+- Given the touch was in the dash zone
+- When the drag distance drops below 56px
+- Then dashHeld becomes false and the thumb returns to blue
+
+**Scenario: Dash clears on stick release**
+- Given the player lifts their finger while in the dash zone
+- Then dashHeld is immediately cleared
+
 **Scenario: Jump button triggers jump**
 - Given the player taps the green jump button on the right side
 - Then the elephant jumps (jumpJustPressed is true for exactly 1 frame)
