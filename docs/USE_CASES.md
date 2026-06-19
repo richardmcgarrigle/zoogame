@@ -71,8 +71,12 @@
 
 **Scenario: Hard landing stomp**
 - Given the elephant was falling faster than 7 px/frame
-- When the elephant lands on a surface
+- When the elephant lands on a floor surface (contact normal pointing upward; ceiling and wall contacts are excluded)
 - Then the camera shakes for 140ms, the elephant sprite squash-stretches (briefly 18% wider and 20% shorter than its base size), and a thud sound plays; if a squash tween is already running it is stopped and the scale is reset to base before the new tween begins
+
+**Scenario: Ceiling and wall contacts do not count as grounded**
+- Given the elephant is in contact with a ceiling or wall platform
+- Then groundContacts is not incremented, the elephant is not considered grounded, and no stomp animation triggers
 
 ---
 

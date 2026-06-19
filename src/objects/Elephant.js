@@ -90,15 +90,30 @@ export default class Elephant {
     return label === 'fruit' || label === 'crate';
   }
 
+  isFloorContact(pair, elephantIsA) {
+    // Collision normal points from bodyA to bodyB.
+    // A floor contact means the platform is below the elephant, so the normal
+    // pointing from the elephant toward the platform is downward (y > 0 in
+    // screen space). Threshold 0.5 excludes wall contacts (normal.y ≈ 0).
+    const ny = pair.collision.normal.y;
+    return elephantIsA ? ny > 0.5 : ny < -0.5;
+  }
+
   onCollisionStart(event) {
     for (const pair of event.pairs) {
       const { bodyA, bodyB } = pair;
       const a = bodyA.label;
       const b = bodyB.label;
-      if ((a === 'elephant' && this.isPlatformLabel(b)) || (b === 'elephant' && this.isPlatformLabel(a))) {
-        this.groundContacts++;
-        const surfaceBody = a === 'elephant' ? bodyB : bodyA;
-        this.contactBodies.set(surfaceBody.id, surfaceBody);
+      if (a === 'elephant' && this.isPlatformLabel(b)) {
+        if (this.isFloorContact(pair, true)) {
+          this.groundContacts++;
+          this.contactBodies.set(bodyB.id, bodyB);
+        }
+      } else if (b === 'elephant' && this.isPlatformLabel(a)) {
+        if (this.isFloorContact(pair, false)) {
+          this.groundContacts++;
+          this.contactBodies.set(bodyA.id, bodyA);
+        }
       }
       if (a === 'elephant' && this.isKickableLabel(b)) {
         if (this.isDashing && b === 'crate') {
@@ -121,10 +136,16 @@ export default class Elephant {
       const { bodyA, bodyB } = pair;
       const a = bodyA.label;
       const b = bodyB.label;
-      if ((a === 'elephant' && this.isPlatformLabel(b)) || (b === 'elephant' && this.isPlatformLabel(a))) {
-        this.groundContacts = Math.max(0, this.groundContacts - 1);
-        const surfaceBody = a === 'elephant' ? bodyB : bodyA;
-        this.contactBodies.delete(surfaceBody.id);
+      if (a === 'elephant' && this.isPlatformLabel(b)) {
+        if (this.contactBodies.has(bodyB.id)) {
+          this.groundContacts = Math.max(0, this.groundContacts - 1);
+          this.contactBodies.delete(bodyB.id);
+        }
+      } else if (b === 'elephant' && this.isPlatformLabel(a)) {
+        if (this.contactBodies.has(bodyA.id)) {
+          this.groundContacts = Math.max(0, this.groundContacts - 1);
+          this.contactBodies.delete(bodyA.id);
+        }
       }
     }
   }
