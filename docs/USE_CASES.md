@@ -72,7 +72,7 @@
 **Scenario: Hard landing stomp**
 - Given the elephant was falling faster than 7 px/frame
 - When the elephant lands on a surface
-- Then the camera shakes for 140ms, the elephant sprite squash-stretches, and a thud sound plays
+- Then the camera shakes for 140ms, the elephant sprite squash-stretches (briefly 18% wider and 20% shorter than its base size), and a thud sound plays; if a squash tween is already running it is stopped and the scale is reset to base before the new tween begins
 
 ---
 
