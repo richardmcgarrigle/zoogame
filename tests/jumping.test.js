@@ -29,15 +29,50 @@ describe('Feature: Jumping', () => {
     });
   });
 
-  describe('Scenario: Cannot jump while airborne', () => {
-    it('does not set velocity when jump pressed in air', () => {
+  describe('Scenario: Double jump', () => {
+    it('launches upward when jump pressed airborne and no mid-air jump used yet', () => {
       const { sprite, elephant } = makeGroundedElephant();
-      elephant.groundContacts = 0; // airborne
+      elephant.groundContacts = 0;
+      elephant.airJumpsUsed = 0;
       justDownMock.mockReturnValueOnce(true);
 
       elephant.update(0, 16, []);
 
-      // setVelocityY should NOT be called with -11
+      const jumpCalls = sprite.setVelocityY.mock.calls.filter(c => c[0] === -11);
+      expect(jumpCalls.length).toBe(1);
+    });
+
+    it('increments airJumpsUsed after a mid-air jump', () => {
+      const { sprite, elephant } = makeGroundedElephant();
+      elephant.groundContacts = 0;
+      elephant.airJumpsUsed = 0;
+      justDownMock.mockReturnValueOnce(true);
+
+      elephant.update(0, 16, []);
+
+      expect(elephant.airJumpsUsed).toBe(1);
+    });
+
+    it('resets airJumpsUsed when grounded', () => {
+      const { elephant } = makeGroundedElephant();
+      elephant.groundContacts = 1;
+      elephant.airJumpsUsed = 1;
+
+      elephant.update(0, 16, []);
+
+      expect(elephant.airJumpsUsed).toBe(0);
+    });
+  });
+
+  describe('Scenario: Cannot jump a third time while airborne', () => {
+    it('does not set velocity when jump pressed in air after mid-air jump consumed', () => {
+      const { sprite, elephant } = makeGroundedElephant();
+      elephant.groundContacts = 0;
+      elephant.airJumpsUsed = 1;
+      justDownMock.mockReturnValueOnce(true);
+
+      elephant.update(0, 16, []);
+
       const jumpCalls = sprite.setVelocityY.mock.calls.filter(c => c[0] === -11);
       expect(jumpCalls.length).toBe(0);
     });

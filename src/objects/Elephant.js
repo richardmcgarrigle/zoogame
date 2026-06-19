@@ -73,6 +73,7 @@ export default class Elephant {
     this.wasGrounded = true;
     this.surfaceAngle = 0;
     this.contactBodies = new Map();
+    this.airJumpsUsed = 0;
 
     scene.matter.world.on('collisionstart', this.onCollisionStart, this);
     scene.matter.world.on('collisionend', this.onCollisionEnd, this);
@@ -204,8 +205,16 @@ export default class Elephant {
       }
 
       // --- Jump ---
-      if (jumpPressed && isGrounded) {
-        this.sprite.setVelocityY(JUMP_VELOCITY);
+      if (isGrounded) {
+        this.airJumpsUsed = 0;
+      }
+      if (jumpPressed) {
+        if (isGrounded) {
+          this.sprite.setVelocityY(JUMP_VELOCITY);
+        } else if (this.airJumpsUsed < 1) {
+          this.sprite.setVelocityY(JUMP_VELOCITY);
+          this.airJumpsUsed++;
+        }
       }
 
       // --- Fall cap ---
@@ -217,13 +226,22 @@ export default class Elephant {
       if (isGrounded && !this.wasGrounded && previousVelocityY > STOMP_FALL_THRESHOLD) {
         this.scene.sounds?.playLand();
         this.scene.cameras.main.shake(140, 0.006);
-        this.scene.tweens.add({
+        if (this._stompTween) {
+          this._stompTween.stop();
+          this._stompTween = null;
+          this.sprite.setScale(BODY_SCALE);
+        }
+        this._stompTween = this.scene.tweens.add({
           targets: this.sprite,
-          scaleX: 1.18,
-          scaleY: 0.8,
+          scaleX: BODY_SCALE * 1.18,
+          scaleY: BODY_SCALE * 0.8,
           duration: 70,
           yoyo: true,
           ease: 'Quad.easeOut',
+          onComplete: () => {
+            this.sprite.setScale(BODY_SCALE);
+            this._stompTween = null;
+          },
         });
       }
 

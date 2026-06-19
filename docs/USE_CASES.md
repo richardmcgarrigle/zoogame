@@ -45,8 +45,14 @@
 - When the player presses Up arrow, W key, gamepad Cross/D-pad-up, or touch jump button
 - Then the elephant launches upward at -11 px/frame vertical velocity
 
-**Scenario: Cannot jump while airborne**
-- Given the elephant is not touching any ground or platform
+**Scenario: Double jump**
+- Given the elephant is airborne and has not yet used a mid-air jump
+- When the player presses the jump input
+- Then the elephant launches upward at -11 px/frame vertical velocity (same as ground jump)
+- And the mid-air jump is consumed (no further air jumps until grounded again)
+
+**Scenario: Cannot jump a third time while airborne**
+- Given the elephant is airborne and has already used one mid-air jump
 - When the player presses the jump input
 - Then no jump occurs
 
