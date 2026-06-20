@@ -1,8 +1,8 @@
 # Project Canopy — Code Review & Refactor Plan
 
-_June 2026_
+_June 2026 — Updated to reflect current codebase state_
 
-**Executive Summary:** Project Canopy is a well-crafted browser game built on Phaser 3 / Matter.js. Core game-feel is excellent; the primary structural issue is a single 1,422-line scene class that accumulates every subsystem. This document identifies twelve code quality issues and presents a prioritised, incremental refactor plan.
+**Executive Summary:** Project Canopy is a well-crafted browser game built on Phaser 3 / Matter.js. A major structural refactor has already decomposed the original 1,422-line monolithic scene class into six focused manager classes, reducing PlaygroundScene to a 390-line orchestrator. This document captures the full review, records completed work, identifies remaining opportunities, and prescribes red-green-refactor TDD as the methodology for all refactoring.
 
 ---
 
@@ -11,10 +11,11 @@ _June 2026_
 1. [Codebase Overview](#1-codebase-overview)
 2. [Strengths](#2-strengths)
 3. [Code Quality Issues](#3-code-quality-issues)
-4. [Prioritised Refactor Plan](#4-prioritised-refactor-plan)
-5. [Proposed Module Structure](#5-proposed-module-structure)
-6. [Suggested Implementation Sequence](#6-suggested-implementation-sequence)
-7. [Summary Scorecard](#7-summary-scorecard)
+4. [Red-Green-Refactor Methodology](#4-red-green-refactor-methodology)
+5. [Prioritised Refactor Plan](#5-prioritised-refactor-plan)
+6. [Implementation Sequence with TDD Cycles](#6-implementation-sequence-with-tdd-cycles)
+7. [Proposed Module Structure](#7-proposed-module-structure)
+8. [Summary Scorecard](#8-summary-scorecard)
 
 ---
 
@@ -22,35 +23,64 @@ _June 2026_
 
 **Stack:** Phaser 3.80 (Canvas/WebGL), Matter.js physics (bundled), Vite 5.4 bundler, vanilla ES2020 JavaScript. No TypeScript, no UI framework, no external assets for game objects.
 
+**Test stack:** Vitest with Phaser mocked, 224 tests across 16 test files, BDD-style describe/scenario structure, mock helpers in `tests/helpers/mockScene.js`.
+
 ### 1.1 File Inventory
 
 | File | Lines | Role | Quality |
 |---|---|---|---|
-| `src/main.js` | 26 | Game entry point — Phaser config | Excellent: minimal, correct |
-| `src/scenes/PlaygroundScene.js` | 1,422 | World state, terrain, physics, scoring, UI, camera, decorations | Needs refactor: too large, mixes responsibilities |
-| `src/objects/Elephant.js` | 305 | Player input, movement, animation | Good: well-structured, `update()` too long |
-| `src/objects/TouchControls.js` | 255 | Mobile on-screen analog stick and buttons | Good: self-contained, minor duplication |
-| `src/util/textures.js` | 236 | Runtime texture generation — all game art | Excellent: creative, efficient, consistent |
-| `src/util/sounds.js` | 131 | Web Audio API synthesis — all sound effects | Good effects, hard to tune |
+| `src/main.js` | 26 | Game entry point — Phaser config | Excellent |
+| `src/scenes/PlaygroundScene.js` | 390 | Scene orchestrator — delegates to managers | Good: focused on wiring |
+| `src/managers/TerrainManager.js` | 361 | Terrain generation, bodies, graphics, queries | Good: well-documented |
+| `src/managers/PlatformSpawner.js` | 434 | Cluster spawn, overlap resolution | Good: JSDoc on key methods |
+| `src/managers/CollisionHandler.js` | 74 | Label-pair dispatch table for physics events | Excellent: clean, additive |
+| `src/managers/UIManager.js` | 298 | HUD, indicator arrows, GOAL! animation | Good |
+| `src/managers/DecorationManager.js` | 199 | Clouds, birds, palms | Good |
+| `src/managers/FruitManager.js` | 113 | Fruit spawn, idle timer, respawn | Good |
+| `src/objects/Elephant.js` | 327 | Player input, movement, animation | Good: `update()` still long |
+| `src/objects/TouchControls.js` | 276 | Mobile on-screen analog stick and buttons | Good |
+| `src/objects/DashEffect.js` | ~50 | Wind streak visual during dash | Good: isolated |
+| `src/util/textures.js` | 235 | Runtime texture generation — all game art | Excellent |
+| `src/util/sounds.js` | 176 | Web Audio API synthesis — all sound effects | Good: well-documented constants |
+| `src/util/constants.js` | 21 | Shared constants (world dimensions, terrain params) | Good |
 
 ### 1.2 Architecture at a Glance
 
-The game runs as a single Phaser scene. Initialization builds procedural terrain and platforms; the update loop drives input, movement, decorations and idle-detection every frame; Matter.js emits collision events that the scene routes to scoring, bouncing and kick logic.
+PlaygroundScene acts as an orchestrator. It creates managers in `create()`, wires them together, and calls their `update()` methods each frame. No gameplay logic lives in the scene itself.
 
-| Subsystem | Where it lives |
+| Subsystem | Owner |
 |---|---|
-| Game entry / Phaser config | `src/main.js` |
-| Terrain generation & extension | `PlaygroundScene` — `buildGround()`, `generateChunkTerrainHeights()`, `extendWorld()` |
-| Platform placement | `PlaygroundScene` — `buildPlatforms()`, `spawnPlatformCluster()`, `resolveOverlap()` |
-| Scoring & world growth | `PlaygroundScene` — `onGoalScored()`, `restartLevel()`, `celebrateGoal()` |
-| Physics collision dispatch | `PlaygroundScene` — `matter:collisionstart` listener |
-| Camera & indicator arrows | `PlaygroundScene` — `create()` camera block, `updateIndicatorArrows()` |
-| HUD & UI | `PlaygroundScene` — `scoreText`, `fruitIdleText`, controller dropdown |
-| Decorations (clouds, birds, palms) | `PlaygroundScene` — `buildPalms()`, `updateClouds()`, `updateBirds()` |
-| Player input & movement | `src/objects/Elephant.js` |
-| Touch controls | `src/objects/TouchControls.js` |
-| Procedural art | `src/util/textures.js` |
-| Procedural audio | `src/util/sounds.js` |
+| Terrain generation & queries | `TerrainManager` |
+| Platform placement & overlap | `PlatformSpawner` |
+| Physics collision dispatch | `CollisionHandler` |
+| HUD, arrows, GOAL! animation | `UIManager` |
+| Clouds, birds, palms | `DecorationManager` |
+| Fruit spawn, idle, respawn | `FruitManager` |
+| Player input & movement | `Elephant` |
+| Touch input | `TouchControls` |
+| Dash visual effect | `DashEffect` |
+| Procedural art | `textures.js` |
+| Procedural audio | `SoundManager` (`sounds.js`) |
+
+### 1.3 Test Inventory
+
+| Test File | Covers |
+|---|---|
+| `terrain.test.js` | `getTerrainYAt()` interpolation, clamping; `minTerrainYInRange()` |
+| `platforms.test.js` | `getPlatformBounds()` AABB at angles; `platformOverlapAmount()` |
+| `movement.test.js` | Horizontal movement speeds, ground vs air, friction deceleration |
+| `jumping.test.js` | Jump velocity, double jump, air jump reset on landing |
+| `dash.test.js` | Dash speed, direction, animation speed |
+| `fruit-kicking.test.js` | Kick impulse direction, speed scaling |
+| `fruit-physics.test.js` | Platform bounce boost, wall bounce, angular velocity flip |
+| `fruit-idle.test.js` | Idle timer accumulation, countdown text, respawn trigger |
+| `crate.test.js` | Crate explosion on dash, debris spawn |
+| `scoring.test.js` | Score increment, text update, fruit destroy/respawn, crate rain, flash |
+| `world-expansion.test.js` | Width growth, terrain amplitude increase, platform/palm rebuild |
+| `level-restart.test.js` | Terrain rebuild, fruit/crate respawn, elephant reset |
+| `touch-controls.test.js` | Pointer routing, consumeJump(), button press/release |
+| `background.test.js` | Cloud creation, bird creation, palm placement |
+| `hud.test.js` | Score text, indicator arrows, GOAL! animation |
 
 ---
 
@@ -58,227 +88,438 @@ The game runs as a single Phaser scene. Initialization builds procedural terrain
 
 ### 2.1 Procedural Art and Audio
 
-All game visuals (platforms, fruit, goal, decorations, UI elements) are generated at runtime using the Phaser Graphics API. This eliminates an asset pipeline entirely, produces a consistent thick-outline aesthetic, and keeps the bundle small. The Web Audio synthesis in `sounds.js` layers four frequency bands to produce satisfying impact sounds with velocity-scaled volume.
+All game visuals are generated at runtime using the Phaser Graphics API. The Web Audio synthesis in `sounds.js` layers four frequency bands with comprehensively documented constants.
 
 ### 2.2 Well-Named Constants
 
-`PlaygroundScene` opens with approximately 50 named constants covering terrain shape, platform placement rules, physics feel and world growth rates. This means most tuning is a single-line edit at the top of the file rather than a buried literal.
+Constants are declared at the top of each module. Shared constants live in `constants.js`. Gamepad button indices are named (`PAD_BTN_CROSS`, `PAD_BTN_SQUARE`, etc.). Lerp coefficients and dead zones are named and documented.
 
 ### 2.3 Unified Input Abstraction
 
-`Elephant.js` consolidates keyboard, gamepad and touch into a single normalised interface (`left`, `right`, `jumpJustPressed`, `dashHeld`). The gamepad "justDown" limitation in Phaser is worked around cleanly with a per-button state map. All three input paths are multi-touch-aware.
+`Elephant.js` consolidates keyboard, gamepad and touch into a single normalised interface. The gamepad "justDown" limitation in Phaser is worked around with a per-button state map.
 
 ### 2.4 Label-Based Collision Dispatch
 
-Every Matter body receives a `label` immediately after creation. The collision handler pattern-matches on these labels rather than holding object references, which makes the system robust to bodies being destroyed and re-created (as happens on every goal score).
+`CollisionHandler` uses a dispatch table mapping label pairs to handler functions. New collision types are additive — add an entry to `_handlers`, no existing code changes.
 
-### 2.5 Non-Destructive World Growth
+### 2.5 Clean Manager Decomposition
 
-When a goal is scored the world widens by 300 px and terrain amplitude increases by 15 px. The new chunk slides in smoothly from below while the existing terrain is preserved. This incremental approach avoids a jarring full-level restart while delivering a genuine difficulty ramp.
+The six extracted managers each own their state and operations. `PlaygroundScene` is a 390-line orchestrator. Each manager can be tested in isolation with mock scenes.
 
-### 2.6 Smooth Terrain Seaming
+### 2.6 Comprehensive Test Suite
 
-Adjacent terrain chunks blend over 5 segments (~300 px) by locking wave phases across chunk boundaries and drifting wavelengths gradually toward new targets. The result is visually seamless despite being generated in independent calls.
+224 tests across 16 files cover terrain, platforms, movement, jumping, dashing, fruit physics, scoring, world expansion, level restart, touch controls, decorations, and HUD. All tests use BDD-style describe/scenario structure.
 
 ---
 
 ## 3. Code Quality Issues
 
-Twelve issues are identified below, grouped by theme. None are critical bugs; all are maintainability or extensibility concerns.
+### 3.1 Completed Fixes
 
-### 3.1 Monolithic Scene Class
+The following issues from the original review have been resolved:
 
-> **PlaygroundScene.js is 1,422 lines and handles terrain generation, platform placement, physics collision dispatch, scoring, world growth, camera, HUD, decorations, and fruit idle detection simultaneously.**
-
-This is the single largest structural problem. Every subsystem is a set of methods and instance variables on the same class, making it hard to:
-
-- **navigate** — finding the platform spawner requires scrolling past terrain code and collision handlers
-- **test** — any test of platform placement must construct a full scene
-- **extend** — adding a new decoration type means editing the same file as physics tuning
-- **reason about** — instance variable ownership is unclear (who owns `this.terrainPoints`?)
-
-The recommended split is five manager classes, each with a single clear responsibility (see Section 4).
-
-### 3.2 Fragile Goal-Scoring Timing Chain
-
-> **Five independent visual events (score flash, GOAL! text, terrain slide, fruit respawn, crate rain) are sequenced with hardcoded millisecond delays. A change to one duration silently breaks the visual sequence.**
-
-**Where:** `PlaygroundScene.onGoalScored()`, `celebrateGoal()` — approximately lines 295–390.
-
-The terrain slide tween runs for 700 ms. Crate drops are staggered starting at 700 ms after the goal. If the tween duration is adjusted, the crates appear to fall at the wrong moment relative to the terrain. No callback or event links these two timings.
-
-**Fix:** Use a Phaser tween `onComplete` callback or a simple event emitter so each stage starts only when the previous stage finishes, rather than relying on matching hardcoded numbers.
-
-### 3.3 Dense Platform Overlap Resolution
-
-> **`resolveOverlap()` is 55 lines of nested loops with no explanatory comments. The four-direction escape heuristic has no guaranteed convergence and silently returns the best-found position when the iteration limit is hit.**
-
-**Where:** `PlaygroundScene.resolveOverlap()` — approximately lines 696–750.
-
-The algorithm tries 20 random placements first, then falls back to 30 deterministic escape iterations. The escape directions (up, down, left, right) are calculated correctly but are completely undocumented. An edge case with many high-angle platforms on a small world could leave two platforms slightly overlapping.
-
-**Fix:** Add a JSDoc comment explaining the two-phase approach, name the escape directions as constants, and add a guard that logs a warning and skips placement if the iteration limit is hit without convergence.
-
-### 3.4 Magic Numbers in Non-Constant Locations
-
-Most tuning values are correctly declared at the top of `PlaygroundScene`. However, several magic numbers appear embedded in method bodies:
-
-| Issue | Location | Detail |
-|---|---|---|
-| Flash timing (120 ms, 1200 ms) | `PlaygroundScene` ~line 302 | Goal flash interval and total duration; not in constants block |
-| GOAL! text style (`120px`, stroke 10) | `PlaygroundScene` ~line 319 | Font size and stroke hardcoded in tween definition |
-| Palm spacing (560 px, jitter 90 px) | `PlaygroundScene` ~line 1047 | Decoration spacing not in top constants block |
-| Bird flap interval (180 ms) | `PlaygroundScene` ~line 1145 | Defined inside `updateBirds()` instead of at top of file |
-| Surface angle lerp (0.18) | `Elephant.js` ~line 287 | Unnamed lerp coefficient; effect unclear without experimentation |
-| Gamepad button indices (0, 1, 2, 3) | `Elephant.js` ~lines 134–136 | Used as bare integers; comment lists mapping but not enforced |
-| Bounce volume floor (0.05) | `sounds.js` line 11 | Silence threshold not a named constant |
-| Noise buffer patterns | `sounds.js` lines 55–94 | Frequency and timing ramps entirely undocumented |
-
-### 3.5 State Scattered Across Scene Fields
-
-Related state for the same game concept is spread across many disconnected instance variables on `PlaygroundScene`:
-
-| Concept | Scattered fields |
+| Issue | Resolution |
 |---|---|
-| Fruit | `this.fruit`, `this.fruitType`, `this.fruitIdleTime`, `this.fruitIdleText`, `fruitArrow` |
-| Terrain | `this.terrainPoints`, `this.groundBodies`, `this.groundGraphicsObjects`, `terrainWaveState`, `terrainAmplitude` |
-| Platforms | `this.platforms`, `this.platformArrows` |
-| Score / World | `this.score`, `this.worldWidth`, `this.scoreText` |
+| Monolithic PlaygroundScene (1,422 lines) | Decomposed into 6 managers; scene is now 390 lines |
+| Fragile goal-scoring timing chain | Terrain tween uses `onComplete` callback to sequence goal slide |
+| Dense undocumented platform overlap | JSDoc added; convergence warning on iteration limit |
+| Magic numbers in method bodies | Named constants throughout: gamepad buttons, lerp, dead zones, sound params |
+| State scattered across scene fields | Grouped into manager classes with explicit ownership |
+| Collision handler as monolithic listener | Dispatch table in `CollisionHandler` |
+| Missing JSDoc on complex methods | 43 JSDoc comments across 9 files |
+| Wind streak in player class | Extracted to `DashEffect` |
+| Fragile `postUpdate()` contract | Replaced with `consumeJump()` |
+| Unused `pngjs` dependency | Removed |
+| Missing guard in `getTerrainYAt()` | Guard added: `!this.terrainPoints?.length` |
+| `resolveOverlap()` convergence | `console.warn` on iteration limit |
+| Sound constants undocumented | Comprehensive named constants with rationale comments |
 
-Grouping these into dedicated manager objects (`FruitManager`, `TerrainManager`, etc.) would make ownership explicit and simplify `restartLevel()`, which currently must reset each field individually.
+### 3.2 Remaining Issues
 
-### 3.6 Input Dead-Zone Inconsistency
+**3.2.1 Elephant.update() is still 130+ lines**
 
-Three separate dead-zone values exist for three input paths, using different units and names: `STICK_DEAD = 0.2` (normalised, in `Elephant.js`), `STICK_DEAD_ZONE = 12` (pixels, in `TouchControls.js`). Keyboard is inherently digital. Adjusting feel for one path has no effect on the others, and the shared-looking names cause confusion about which unit is in use.
+`Elephant.update()` handles input polling, movement decisions, jump logic, fall cap, landing stomp, and animation selection in one method. It would benefit from splitting into `updateInput()`, `updateMovement()`, and `updateAnimation()` — each independently testable.
 
-### 3.7 Collision Handler as a Monolithic Listener
+**3.2.2 Noise buffer creation is duplicated in sounds.js**
 
-All collision types are resolved inside one `matter:collisionstart` listener (~25 lines). Adding a new collision type requires editing this block and being careful not to break existing branches. A dispatch table mapping label pairs to handler functions would make additions safe and isolated.
+Lines 101–103, 119–121, and 137–139 repeat the same pattern: `createBuffer` → `getChannelData` → fill with `Math.random() * 2 - 1`. A `createNoiseBuffer(duration)` helper would eliminate the duplication.
 
-### 3.8 Missing JSDoc on Complex Methods
+**3.2.3 Crate management split across PlaygroundScene and CollisionHandler**
 
-The most complex methods in the codebase have no documentation:
+`addCrate()` and `explodeCrate()` live on `PlaygroundScene`, while crate collision logic lives in `Elephant.onCollisionStart()`. A `CrateManager` would group crate lifecycle (spawn, explode, cleanup) and make crate-related tests self-contained.
 
-- `generateChunkTerrainHeights()` — 90 lines of wave generation and blending
-- `spawnPlatformCluster()` — recursive cluster spawner with depth decay
-- `resolveOverlap()` — two-phase overlap resolution heuristic
-- `updateBirds()` — frame-based wing animation state machine
-- `bounceFruitOffPlatform()` — physics impulse calculation with platform angle
+**3.2.4 Colour palette not centralised**
 
-`Elephant.js` and `TouchControls.js` are better documented through variable names but still lack method-level docstrings. `sounds.js` has no documentation of frequency choices or timing rationale.
+Outline colour `0x1a1a1a`, fruit colours, and button colours are spread across `textures.js`, `TouchControls.js`, and `DecorationManager.js`. A shared palette would make theming a single-file change.
 
-### 3.9 Wind Streak Rendering in Player Class
+**3.2.5 Sky gradient drawn inline in PlaygroundScene.create()**
 
-`Elephant.js` creates a `Phaser.GameObjects.Graphics` object and redraws it every frame during a dash. This is a visual effect, not gameplay logic, and its presence in the input/movement class blurs the class responsibility. It is also mildly inefficient — clear-and-redraw every frame at 60 FPS is fine for one effect but sets a precedent that does not scale.
+The 20-line sky gradient rendering (lines 75–98) is visual decoration that belongs in `DecorationManager`, consistent with where clouds, birds, and palms already live.
 
-### 3.10 Fragile postUpdate() Contract in TouchControls
+**3.2.6 No createNoiseBuffer helper in sounds.js**
 
-`TouchControls.postUpdate()` must be called every frame to clear `jumpJustPressed`. If `PlaygroundScene` forgets this call, jump becomes permanently sticky. There is no mechanism to enforce the contract. An alternative is to expose a `consumeJump()` method that clears the flag when read, so the contract is impossible to accidentally violate.
-
-### 3.11 Unused Dependency
-
-`pngjs ^7.0.0` is listed in `package.json` devDependencies but is not imported anywhere in the codebase. It should be removed to keep the dependency list honest.
-
-### 3.12 Missing Guard in getTerrainYAt()
-
-`getTerrainYAt(x)` assumes `this.terrainPoints` is populated. If called before `buildGround()` — e.g., during an accidental early update tick — it will throw a silent runtime error. A one-line guard would surface this clearly.
+Three identical noise-buffer creation blocks could share a helper.
 
 ---
 
-## 4. Prioritised Refactor Plan
+## 4. Red-Green-Refactor Methodology
 
-Work items are ordered by value-to-effort ratio. P1 items fix the largest structural problems. P2 items significantly improve day-to-day maintainability. P3 items are polish. P4 items are minor cleanups that can be done opportunistically.
+Every refactoring step follows the red-green-refactor TDD cycle. This ensures that behaviour is locked in by tests before any structural change, and that the refactor itself cannot silently break functionality.
 
-> All refactors can be done incrementally. Each item is self-contained and can be merged independently. None require changing game behaviour.
+### The Cycle
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│   RED ──────► GREEN ──────► REFACTOR ──────► RED ...    │
+│                                                         │
+│   Write a      Make it      Restructure     Next        │
+│   failing      pass with    the code        behaviour   │
+│   test         minimal      while keeping                │
+│                code         tests green                  │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**RED — Write a failing test first**
+- The test describes the _behaviour_ the refactored code must preserve or introduce.
+- Import the _new_ module (e.g., `CrateManager`) or the _new_ method (e.g., `Elephant.updateMovement()`). The import fails or the method doesn't exist — the test is red.
+- The test should be as specific as possible: assert on return values, state changes, or mock call counts — not "it doesn't throw."
+- For extraction refactors, the test is a _characterisation test_: it captures the existing behaviour of the code that will be moved, written against the new interface that doesn't exist yet.
+
+**GREEN — Make the test pass with minimal code**
+- Create the new file/class/method.
+- Move or copy the code that satisfies the test.
+- Do _not_ clean up, rename, or restructure beyond what the test requires.
+- Run the full test suite — all 224+ tests must pass, not just the new one.
+
+**REFACTOR — Improve structure while green**
+- Now clean up: remove duplication between old and new locations, rename for clarity, extract helpers, delete dead code in the original file.
+- After each change, run the full suite. If anything goes red, undo the last change and investigate.
+- This is also the time to update `AGENTS.md` and `docs/USE_CASES.md` to reflect the new structure.
+
+### Rules
+
+1. **Never refactor while red.** If the new test is failing, focus only on making it pass. Resist the urge to "also fix that thing while you're in there."
+2. **One behaviour per cycle.** Each red-green-refactor cycle should cover one testable behaviour. An extraction refactor may need several cycles (one per public method being moved).
+3. **Commit at green.** After every green step, commit. The refactor step gets its own commit. This means each refactor produces at least two commits: one for the new tests + minimal code (green), one for the structural cleanup (refactor).
+4. **Existing tests are the safety net.** The 224 existing tests must stay green throughout. They catch regressions that the new characterisation tests might not cover.
+5. **Run the game after each refactor commit.** Tests verify code correctness; playing the game verifies _feel_. Physics tuning, animation timing, and input responsiveness can regress in ways unit tests don't catch.
+
+---
+
+## 5. Prioritised Refactor Plan
+
+### 5.1 Completed Items
+
+| Priority | Item | Status |
+|---|---|---|
+| **P1** | Extract `TerrainManager` | Done |
+| **P1** | Extract `PlatformSpawner` | Done |
+| **P1** | Fix goal-scoring timing chain | Done |
+| **P2** | Extract `CollisionHandler` | Done |
+| **P2** | Extract `UIManager` | Done |
+| **P2** | Extract `DecorationManager` | Done |
+| **P2** | Add JSDoc to complex methods | Done |
+| **P2** | Move remaining magic numbers to constants | Done |
+| **P3** | Consolidate input dead-zone handling | Done (documented; intentionally separate units) |
+| **P3** | Replace `postUpdate()` with `consumeJump()` | Done |
+| **P3** | Move wind-streak effect out of Elephant | Done (`DashEffect`) |
+| **P3** | Add `sounds.js` constants and comments | Done |
+| **P4** | Remove `pngjs` dependency | Done |
+| **P4** | Guard `getTerrainYAt()` | Done |
+| **P4** | Add `resolveOverlap()` convergence warning | Done |
+
+### 5.2 Remaining Items
 
 | Priority | Item | Rationale | Effort | Impact |
 |---|---|---|---|---|
-| **P1** | Extract `TerrainManager` | `buildGround()`, `generateChunkTerrainHeights()`, `extendWorld()`, `getTerrainYAt()` and all terrain state move to a dedicated class. Largest single extraction; reduces `PlaygroundScene` by ~250 lines. | Medium | High |
-| **P1** | Extract `PlatformSpawner` | `buildPlatforms()`, `spawnPlatformCluster()`, `getPlatformBounds()`, `resolveOverlap()` and platform state move out. Allows the overlap algorithm to be tested in isolation and documented properly. | Medium | High |
-| **P1** | Fix goal-scoring timing chain | Replace hardcoded delay offsets with tween `onComplete` callbacks and a simple event sequence. Prevents visual desync when any tween duration is adjusted. | Small | Medium |
-| **P2** | Extract `CollisionHandler` | Move the `collisionstart` listener to its own class with a label-pair dispatch table. New collision types become additive rather than requiring edits to an existing block. | Small | Medium |
-| **P2** | Extract `UIManager` | `scoreText`, `fruitIdleText`, indicator arrows, controller dropdown, and GOAL! animation move to one class. `PlaygroundScene` stops owning display objects unrelated to physics. | Medium | Medium |
-| **P2** | Extract `DecorationManager` | `buildPalms()`, `updateClouds()`, `updateBirds()` and decoration state move out. Decorations are entirely cosmetic; separating them means touching 0 gameplay code when tweaking visuals. | Small | Medium |
-| **P2** | Add JSDoc to complex methods | `generateChunkTerrainHeights()`, `spawnPlatformCluster()`, `resolveOverlap()`, `bounceFruitOffPlatform()`, `updateBirds()`. Reduces onboarding time and makes intent clear before code is read. | Small | Medium |
-| **P2** | Move remaining magic numbers to constants | Flash timings, GOAL! text style, palm spacing, bird flap interval, surface angle lerp, gamepad button indices. All tuning in one place; no need to grep method bodies. | Small | Low |
-| **P3** | Consolidate input dead-zone handling | Single `STICK_DEAD_ZONE` constant shared across `TouchControls` and `Elephant`; documented unit (normalised). Tuning feel for analogue input becomes a one-variable change. | Small | Low |
-| **P3** | Replace `postUpdate()` with `consumeJump()` | `TouchControls` exposes `consumeJump()` that returns the flag and clears it. Elephant calls it once per frame. Eliminates the "must call postUpdate every frame or jump sticks" footgun. | Small | Low |
-| **P3** | Move wind-streak effect out of Elephant | Extract wind streak rendering to a `DashEffect` helper owned by the scene. `Elephant` becomes pure input/movement; visual effects can be changed without touching physics code. | Small | Low |
-| **P3** | Add `sounds.js` constants and comments | Document frequency choices, name volume gains as constants, expose a master volume multiplier. Makes audio tuning approachable without Web Audio API expertise. | Small | Low |
-| **P4** | Remove `pngjs` dependency | `npm uninstall pngjs` — it is imported nowhere. | Trivial | Low |
-| **P4** | Guard `getTerrainYAt()` against missing points | One-line guard; surfaces initialisation-order bugs immediately instead of silently. | Trivial | Low |
-| **P4** | Add `resolveOverlap()` convergence warning | `console.warn` when iteration limit is hit without convergence. Makes edge-case platform placement failures visible during development. | Trivial | Low |
+| **P2** | Split `Elephant.update()` | 130+ line method doing input, movement, jump, stomp, animation. Split into `updateInput()`, `updateMovement()`, `updateAnimation()` — each independently testable. | Medium | Medium |
+| **P2** | Extract `CrateManager` | `addCrate()`, `explodeCrate()`, crate array management, and crate rain logic currently on PlaygroundScene. Grouping them enables isolated crate lifecycle tests. | Medium | Medium |
+| **P3** | Extract `createNoiseBuffer()` helper in sounds.js | Three identical noise-buffer creation blocks. A shared helper eliminates duplication. | Small | Low |
+| **P3** | Move sky gradient to `DecorationManager` | 20 lines of visual rendering in `PlaygroundScene.create()` belongs with other decorations. | Small | Low |
+| **P3** | Centralise colour palette | Outline, fruit, and button colours scattered across files. A `palette.js` would make theming a single-file change. | Small | Low |
 
 ---
 
-## 5. Proposed Module Structure
+## 6. Implementation Sequence with TDD Cycles
 
-After completing the P1 and P2 extractions, the source tree would look like this:
+Each step below details the red-green-refactor cycle. Steps are independently mergeable.
+
+---
+
+### Step 1: Split `Elephant.update()` into sub-methods (P2)
+
+The 130-line `update()` method handles input polling, movement application, jump/stomp logic, and animation selection. Splitting it makes each concern independently testable.
+
+#### Cycle 1a: Extract `updateMovement()`
+
+**RED** — Write `tests/elephant-movement-split.test.js`:
+```js
+import Elephant from '../src/objects/Elephant.js';
+
+it('updateMovement applies ground speed when grounded and moving right', () => {
+  const elephant = makeElephant({ groundContacts: 1 });
+  elephant.updateMovement({ left: false, right: true, dashHeld: false });
+  expect(elephant.sprite.setVelocityX).toHaveBeenCalledWith(4.5);
+});
+
+it('updateMovement applies air speed when airborne', () => {
+  const elephant = makeElephant({ groundContacts: 0 });
+  elephant.updateMovement({ left: false, right: true, dashHeld: false });
+  expect(elephant.sprite.setVelocityX).toHaveBeenCalledWith(3.2);
+});
+
+it('updateMovement applies dash speed when dashing', () => {
+  const elephant = makeElephant({ groundContacts: 1, facing: 1 });
+  elephant.updateMovement({ left: false, right: true, dashHeld: true });
+  expect(elephant.sprite.setVelocityX).toHaveBeenCalledWith(9);
+});
+```
+These fail because `updateMovement()` doesn't exist on Elephant.
+
+**GREEN** — Extract the movement block from `update()` into a new `updateMovement(input)` method. Call it from `update()`. Run full suite — all 224+ tests pass.
+
+**REFACTOR** — Remove duplicated inline movement code from `update()`. Ensure `update()` calls `this.updateMovement(input)` where `input` is the normalised input object built earlier in the method. Commit.
+
+#### Cycle 1b: Extract `updateAnimation()`
+
+**RED** — Add tests:
+```js
+it('updateAnimation plays jump-up when airborne and rising', () => {
+  const elephant = makeElephant({ groundContacts: 0 });
+  elephant.sprite.body.velocity.y = -5;
+  elephant.updateAnimation({ left: false, right: false, dashHeld: false });
+  expect(elephant.sprite.play).toHaveBeenCalledWith('elephant-jump-up', true);
+});
+
+it('updateAnimation plays run when moving horizontally on ground', () => {
+  const elephant = makeElephant({ groundContacts: 1 });
+  elephant.updateAnimation({ left: true, right: false, dashHeld: false });
+  expect(elephant.sprite.play).toHaveBeenCalledWith('elephant-run', true);
+});
+```
+These fail because `updateAnimation()` doesn't exist.
+
+**GREEN** — Extract the animation selection block into `updateAnimation(input)`. Run full suite.
+
+**REFACTOR** — `update()` is now a short orchestrator: build input → `updateMovement(input)` → jump/stomp → `updateAnimation(input)` → visuals → dash effect. Clean up any dead local variables. Commit.
+
+---
+
+### Step 2: Extract `CrateManager` (P2)
+
+Crate lifecycle is currently split between `PlaygroundScene` (`addCrate`, `explodeCrate`, `this.crates` array) and `Elephant.onCollisionStart` (dash-explosion trigger). A `CrateManager` would own spawn, explode, cleanup, and the crate rain logic from `onGoalScored`.
+
+#### Cycle 2a: Test crate spawning
+
+**RED** — Write `tests/crate-manager.test.js`:
+```js
+import CrateManager from '../src/managers/CrateManager.js';
+
+it('addCrate creates a matter image with label "crate"', () => {
+  const manager = makeCrateManager();
+  const crate = manager.addCrate(100, 200);
+  expect(crate.body.label).toBe('crate');
+});
+
+it('tracks spawned crates in crates array', () => {
+  const manager = makeCrateManager();
+  manager.addCrate(100, 200);
+  manager.addCrate(300, 200);
+  expect(manager.crates).toHaveLength(2);
+});
+```
+Fails — `CrateManager` doesn't exist.
+
+**GREEN** — Create `src/managers/CrateManager.js` with `addCrate()`. Move the body from `PlaygroundScene.addCrate()`. Run full suite.
+
+**REFACTOR** — Update `PlaygroundScene` to use `this.crateManager.addCrate()` instead of `this.addCrate()`. Delete `PlaygroundScene.addCrate()`. Commit.
+
+#### Cycle 2b: Test crate explosion
+
+**RED** — Add tests:
+```js
+it('explodeCrate destroys the crate and removes it from tracking', () => {
+  const manager = makeCrateManager();
+  const crate = manager.addCrate(100, 200);
+  manager.explodeCrate(crate);
+  expect(crate.destroy).toHaveBeenCalled();
+  expect(manager.crates).toHaveLength(0);
+});
+
+it('explodeCrate spawns 10 debris particles', () => {
+  const manager = makeCrateManager();
+  const crate = manager.addCrate(100, 200);
+  manager.explodeCrate(crate);
+  expect(manager.scene.add.rectangle).toHaveBeenCalledTimes(10);
+});
+```
+
+**GREEN** — Move `explodeCrate()` from `PlaygroundScene` to `CrateManager`. Run full suite.
+
+**REFACTOR** — Update `Elephant.onCollisionStart` to call `this.scene.crateManager.explodeCrate()`. Update `PlaygroundScene.onGoalScored` crate rain to use `this.crateManager.addCrate()`. Remove crate methods from `PlaygroundScene`. Commit.
+
+#### Cycle 2c: Test crate rain
+
+**RED** — Add test:
+```js
+it('dropCrateRain schedules N staggered crate drops', () => {
+  const manager = makeCrateManager();
+  manager.dropCrateRain(3, 1700); // 3 crates, starting at 1700ms
+  expect(manager.scene.time.delayedCall).toHaveBeenCalledTimes(3);
+});
+```
+
+**GREEN** — Extract the crate rain loop from `onGoalScored` into `CrateManager.dropCrateRain(count, startDelay)`.
+
+**REFACTOR** — `onGoalScored` now calls `this.crateManager.dropCrateRain(this.score, FRUIT_RESPAWN_DELAY)`. Clean up. Commit.
+
+---
+
+### Step 3: Extract `createNoiseBuffer()` helper in sounds.js (P3)
+
+#### Single cycle
+
+**RED** — Write `tests/sounds.test.js`:
+```js
+import { createNoiseBuffer } from '../src/util/sounds.js';
+
+it('creates a buffer of the requested duration', () => {
+  const ctx = new OfflineAudioContext(1, 44100, 44100);
+  const buf = createNoiseBuffer(ctx, 0.5);
+  expect(buf.duration).toBeCloseTo(0.5, 1);
+});
+
+it('fills the buffer with values in [-1, 1]', () => {
+  const ctx = new OfflineAudioContext(1, 44100, 44100);
+  const buf = createNoiseBuffer(ctx, 0.1);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    expect(data[i]).toBeGreaterThanOrEqual(-1);
+    expect(data[i]).toBeLessThanOrEqual(1);
+  }
+});
+```
+Fails — `createNoiseBuffer` is not exported.
+
+**GREEN** — Add the exported function. Run full suite.
+
+**REFACTOR** — Replace the three inline noise buffer blocks in `playCrateBreak()` with calls to `createNoiseBuffer()`. Run suite. Commit.
+
+---
+
+### Step 4: Move sky gradient to `DecorationManager` (P3)
+
+#### Single cycle
+
+**RED** — Add to `tests/background.test.js`:
+```js
+it('createSkyGradient draws gradient bands to a graphics object', () => {
+  const decorations = makeDecorationManager();
+  decorations.createSkyGradient();
+  expect(decorations.scene.add.graphics).toHaveBeenCalled();
+});
+```
+Fails — `createSkyGradient()` doesn't exist on `DecorationManager`.
+
+**GREEN** — Move the sky gradient block from `PlaygroundScene.create()` into `DecorationManager.createSkyGradient()`. Call it from `PlaygroundScene.create()`. Run full suite.
+
+**REFACTOR** — Delete the inline gradient code from `PlaygroundScene.create()`. Commit.
+
+---
+
+### Step 5: Centralise colour palette (P3)
+
+#### Single cycle
+
+**RED** — Write `tests/palette.test.js`:
+```js
+import { PALETTE } from '../src/util/palette.js';
+
+it('exports outline colour', () => {
+  expect(PALETTE.outline).toBe(0x1a1a1a);
+});
+
+it('exports fruit colours', () => {
+  expect(PALETTE.orange).toBeDefined();
+  expect(PALETTE.apple).toBeDefined();
+  expect(PALETTE.melon).toBeDefined();
+});
+```
+Fails — `palette.js` doesn't exist.
+
+**GREEN** — Create `src/util/palette.js` exporting the colour constants. Run full suite.
+
+**REFACTOR** — Update `textures.js`, `TouchControls.js`, `DecorationManager.js`, and `constants.js` to import from `palette.js` instead of defining colours inline. Delete the old inline colour definitions. Run full suite after each file. Commit.
+
+---
+
+## 7. Proposed Module Structure
+
+After completing the remaining items, the source tree would be:
 
 ```
 src/
   main.js                        (unchanged)
   scenes/
-    PlaygroundScene.js           (~300 lines — orchestration only)
+    PlaygroundScene.js           (~350 lines — orchestration only)
   objects/
-    Elephant.js                  (unchanged)
+    Elephant.js                  (update split into sub-methods)
     TouchControls.js             (unchanged)
+    DashEffect.js                (unchanged)
   managers/
     TerrainManager.js            (terrain gen, bodies, graphics, queries)
     PlatformSpawner.js           (cluster spawn, overlap resolution)
     CollisionHandler.js          (dispatch table for physics events)
     UIManager.js                 (HUD, indicator arrows, GOAL! animation)
-    DecorationManager.js         (clouds, birds, palms)
+    DecorationManager.js         (clouds, birds, palms, sky gradient)
     FruitManager.js              (spawn, idle timer, respawn)
+    CrateManager.js              (spawn, explode, cleanup, crate rain)
   util/
     textures.js                  (unchanged)
-    sounds.js                    (constants added)
-    constants.js                 (shared constants — dead zones, etc.)
+    sounds.js                    (with createNoiseBuffer helper)
+    constants.js                 (shared constants)
+    palette.js                   (centralised colour definitions)
+tests/
+  terrain.test.js
+  platforms.test.js
+  movement.test.js
+  jumping.test.js
+  dash.test.js
+  fruit-kicking.test.js
+  fruit-physics.test.js
+  fruit-idle.test.js
+  crate.test.js
+  crate-manager.test.js          (new)
+  scoring.test.js
+  world-expansion.test.js
+  level-restart.test.js
+  touch-controls.test.js
+  background.test.js
+  hud.test.js
+  sounds.test.js                 (new)
+  palette.test.js                (new)
+  helpers/
+    mockScene.js
 ```
 
-`PlaygroundScene` becomes an orchestrator: it creates the managers, passes them to each other where needed (e.g., `CollisionHandler` receives `TerrainManager` and `FruitManager`), and calls their `update()` methods each frame. No gameplay logic lives in the scene itself.
-
 ---
 
-## 6. Suggested Implementation Sequence
-
-Each step below is independently mergeable and does not break existing behaviour.
-
-| Step | Work |
-|---|---|
-| 1 | Remove `pngjs` (P4, trivial — good warm-up, confirms CI works) |
-| 2 | Move remaining magic numbers to constants block in `PlaygroundScene` (P2) |
-| 3 | Add JSDoc comments to the five undocumented complex methods (P2) |
-| 4 | Add `sounds.js` constants and document frequency rationale (P3) |
-| 5 | Fix goal-scoring timing chain with `onComplete` callbacks (P1) |
-| 6 | Extract `TerrainManager` — copy methods, update all callers, delete originals (P1) |
-| 7 | Extract `PlatformSpawner` (P1) |
-| 8 | Extract `FruitManager` — fruit spawn, idle timer, respawn (P2) |
-| 9 | Extract `CollisionHandler` with dispatch table (P2) |
-| 10 | Extract `UIManager` — HUD, arrows, GOAL! animation (P2) |
-| 11 | Extract `DecorationManager` — clouds, birds, palms (P2) |
-| 12 | Consolidate dead-zone handling; replace `postUpdate()` with `consumeJump()` (P3) |
-| 13 | Move wind-streak effect to `DashEffect` helper (P3) |
-| 14 | Add `getTerrainYAt()` guard; add `resolveOverlap()` convergence warning (P4) |
-
-> Steps 6–11 (the manager extractions) are the most time-consuming but can be done in any order. Each extraction can be verified by running the game and checking that feel, scoring, terrain growth and decorations are unchanged.
-
----
-
-## 7. Summary Scorecard
+## 8. Summary Scorecard
 
 | Dimension | Assessment |
 |---|---|
-| Correctness | No critical bugs found. Physics, scoring, and world growth logic are correct. |
-| Code organisation | Needs work — one file handles eight distinct subsystems. |
-| Naming | Good in constants and variables; gamepad button indices and dead-zone names are exceptions. |
-| Documentation | Thin — complex algorithms have no JSDoc; `sounds.js` has no rationale comments. |
-| Test coverage | None. All validation is manual in-browser. |
-| Extensibility | Low for collisions and decorations; good for terrain tuning (constants-driven). |
-| Dependencies | Minimal and appropriate; one unused package (`pngjs`) to remove. |
+| Correctness | No bugs found. Physics, scoring, and world growth logic are correct. |
+| Code organisation | Strong — 6 managers extracted, scene is an orchestrator. Minor opportunities remain (CrateManager, Elephant split). |
+| Naming | Good throughout. Constants named, gamepad buttons named, dead zones documented. |
+| Documentation | Good — 43 JSDoc comments, comprehensive AGENTS.md, BDD use cases. |
+| Test coverage | Strong — 224 tests across 16 files covering all major subsystems. |
+| Extensibility | Good — collision dispatch is additive, managers are independent, terrain is parameterised. |
+| Dependencies | Minimal and clean — Phaser only. |
 | Game feel | Excellent — physics tuning, procedural art, and audio are high quality. |
-| Overall | Good prototype, needs structural refactor before the codebase grows further. |
+| Overall | Well-structured codebase with a solid test suite. Remaining refactors are polish, not structural. |
 
 ---
 
-**Bottom line:** Project Canopy has excellent game feel and a sound high-level architecture. The primary risk is that `PlaygroundScene` will become increasingly difficult to change as the game grows. The refactor plan above, completed in sequence, will reduce the scene to an orchestrator of well-defined managers, bring the codebase to a maintainable state, and make future feature development faster and less risky.
+**Bottom line:** The major structural refactor is complete. PlaygroundScene is a 390-line orchestrator backed by six focused managers and 224 tests. The remaining five items are polish-level improvements that follow the same red-green-refactor methodology used for the completed work. Each produces a small, independently mergeable commit that expands test coverage while improving code organisation.
