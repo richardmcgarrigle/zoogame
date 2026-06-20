@@ -42,7 +42,7 @@
 
 **Scenario: Jump from ground**
 - Given the elephant is on the ground (groundContacts > 0)
-- When the player presses Up arrow, W key, gamepad Cross/D-pad-up, or touch jump button
+- When the player presses Up arrow, W key, gamepad Cross/D-pad-up, touch jump button, or pushes the analog stick into the radial jump zone
 - Then the elephant launches upward at -11 px/frame vertical velocity
 
 **Scenario: Double jump**
@@ -374,6 +374,17 @@
 **Scenario: Dash clears on stick release**
 - Given the player lifts their finger while in the dash zone
 - Then dashHeld is immediately cleared
+
+**Scenario: Radial jump zone triggers jump**
+- Given the player pushes the analog stick into the top 60° (−30° to +30° from straight up)
+- And the displacement exceeds the 12px dead zone
+- Then the elephant jumps (jumpJustPressed is true for exactly 1 frame)
+- And the stick thumb turns green to indicate the jump zone is active
+
+**Scenario: Radial jump zone does not re-trigger while held**
+- Given the stick is already in the jump zone
+- When the player continues to hold the stick within the zone
+- Then no additional jump is triggered until the stick leaves and re-enters the zone
 
 **Scenario: Jump button triggers jump**
 - Given the player taps the green jump button on the right side

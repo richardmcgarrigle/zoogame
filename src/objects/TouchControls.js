@@ -6,6 +6,9 @@
  *   thumb follows the pointer and is clamped to a max radius. Horizontal
  *   displacement past a dead zone sets .left / .right.
  *
+ * Radial jump zone — pushing the stick into the top 60° (−30° to +30° from
+ *   straight up) triggers a jump.
+ *
  * Bottom-right corner — fixed jump & dash buttons.
  *
  * Public state flags read by Elephant.js each frame:
@@ -22,6 +25,12 @@ const STICK_DEAD_ZONE     = 12;   // px dead zone before left/right activates
 const STICK_DASH_THRESHOLD = 56;  // px beyond which drag activates dash
 const STICK_BASE_ALPHA    = 0.30;
 const STICK_THUMB_ALPHA   = 0.65;
+
+// Jump zone: top 60° of the radial (−30° to +30° from straight up).
+// In atan2 coords (Y-down), straight up is −π/2. The zone spans
+// from −2π/3 (−120°) to −π/3 (−60°).
+const JUMP_ZONE_MIN = -Math.PI * 2 / 3;  // −120°
+const JUMP_ZONE_MAX = -Math.PI / 3;      // −60°
 
 const BTN_SIZE   = 70;
 const BTN_MARGIN = 20;
@@ -44,6 +53,7 @@ export default class TouchControls {
     this.jumpJustPressed = false;
     this._jumpWasDown    = false;
     this.dashHeld        = false;
+    this._inJumpZone     = false;  // tracks whether stick is currently in jump zone
 
     // --- analog stick ---
     this._stickPointerId = null;
@@ -96,7 +106,7 @@ export default class TouchControls {
     this._stickContainer.setVisible(visible);
   }
 
-  _drawStick(thumbX, thumbY, dashing) {
+  _drawStick(thumbX, thumbY, dashing, inJumpZone) {
     const bx = this._stickBase.x;
     const by = this._stickBase.y;
 
@@ -112,7 +122,18 @@ export default class TouchControls {
     this._stickBaseGfx.lineStyle(2, 0xffffff, 0.5);
     this._stickBaseGfx.strokeCircle(bx, by, STICK_DASH_THRESHOLD);
 
-    const thumbColor = dashing ? 0xff8822 : 0x3399ff;
+    // Jump zone arc at the top of the stick base
+    const jumpAlpha = inJumpZone ? 0.7 : 0.35;
+    this._stickBaseGfx.lineStyle(3, 0x44cc55, jumpAlpha);
+    this._stickBaseGfx.beginPath();
+    this._stickBaseGfx.arc(bx, by, STICK_DEAD_ZONE + 4, JUMP_ZONE_MIN, JUMP_ZONE_MAX, false);
+    this._stickBaseGfx.strokePath();
+    this._stickBaseGfx.lineStyle(2, 0x44cc55, jumpAlpha * 0.7);
+    this._stickBaseGfx.beginPath();
+    this._stickBaseGfx.arc(bx, by, STICK_BASE_RADIUS - 4, JUMP_ZONE_MIN, JUMP_ZONE_MAX, false);
+    this._stickBaseGfx.strokePath();
+
+    const thumbColor = inJumpZone ? 0x44cc55 : dashing ? 0xff8822 : 0x3399ff;
     this._stickThumbGfx.clear();
     this._stickThumbGfx.fillStyle(thumbColor, STICK_THUMB_ALPHA);
     this._stickThumbGfx.fillCircle(thumbX, thumbY, STICK_THUMB_RADIUS);
@@ -131,7 +152,16 @@ export default class TouchControls {
 
     const dashing = dist >= STICK_DASH_THRESHOLD;
     this.dashHeld = dashing;
-    this._drawStick(tx, ty, dashing);
+
+    const EPS = 1e-10;
+    const inJumpZone = dist > STICK_DEAD_ZONE &&
+      angle >= JUMP_ZONE_MIN - EPS && angle <= JUMP_ZONE_MAX + EPS;
+    if (inJumpZone && !this._inJumpZone) {
+      this.jumpJustPressed = true;
+    }
+    this._inJumpZone = inJumpZone;
+
+    this._drawStick(tx, ty, dashing, inJumpZone);
 
     const hx = tx - this._stickBase.x;
     this.left  = hx < -STICK_DEAD_ZONE;
@@ -140,8 +170,9 @@ export default class TouchControls {
 
   _startStick(px, py) {
     this._stickBase = { x: px, y: py };
+    this._inJumpZone = false;
     this._setStickVisible(true);
-    this._drawStick(px, py, false);
+    this._drawStick(px, py, false, false);
     this.left  = false;
     this.right = false;
   }
@@ -149,9 +180,10 @@ export default class TouchControls {
   _endStick() {
     this._stickPointerId = null;
     this._setStickVisible(false);
-    this.left     = false;
-    this.right    = false;
-    this.dashHeld = false;
+    this.left        = false;
+    this.right       = false;
+    this.dashHeld    = false;
+    this._inJumpZone = false;
   }
 
   // ---------------------------------------------------------------------------
