@@ -30,6 +30,11 @@ const PLATFORM_GAP_Y_MIN_FROM_GROUND = 40;
 // none of them visually or physically intersect.
 const PLATFORM_OVERLAP_BUFFER = 12;
 const PLATFORM_PLACEMENT_ATTEMPTS = 20;
+// Extend terrain clearance checks this far beyond the platform AABB on each
+// side so that platforms near chunk boundaries (where the terrain elevation
+// changes) still leave enough room for the elephant to pass underneath when
+// approaching from adjacent higher terrain.
+const TERRAIN_CLEARANCE_MARGIN = 80;
 
 // Cluster-based platform spawning: mini-chunks decide whether to spawn a
 // cluster root, then recursively dress the cluster with children.
@@ -161,10 +166,15 @@ export default class PlatformSpawner {
     const angle = sign * Phaser.Math.Between(PLATFORM_MIN_ANGLE, effectiveMax);
 
     const refBounds = this.getPlatformBounds(0, 0, scale, angle);
+    const rotatedHalfW = (refBounds.maxX - refBounds.minX) / 2;
     const rotatedHalfH = (refBounds.maxY - refBounds.minY) / 2;
-    // Use the actual terrain height at the anchor so platforms on slopes still
-    // leave enough clearance for the elephant to pass underneath.
-    const terrainAtAnchor = this.terrain.getTerrainYAt(anchorX);
+    // Sample terrain across the platform's potential footprint (plus margin)
+    // so platforms near chunk boundaries where elevation drops still leave
+    // enough clearance for the elephant approaching from higher terrain.
+    const terrainAtAnchor = this.terrain.minTerrainYInRange(
+      anchorX - rotatedHalfW - TERRAIN_CLEARANCE_MARGIN,
+      anchorX + rotatedHalfW + TERRAIN_CLEARANCE_MARGIN,
+    );
     const effectiveMaxY = terrainAtAnchor - ELEPHANT_CLEARANCE - rotatedHalfH;
 
     // Constrain to world edges only; mini-chunk boundaries are just anchor hints.
@@ -285,7 +295,7 @@ export default class PlatformSpawner {
     let converged = false;
 
     for (let iter = 0; iter < 30; iter++) {
-      const groundY = this.terrain.minTerrainYInRange(bounds.minX, bounds.maxX);
+      const groundY = this.terrain.minTerrainYInRange(bounds.minX - TERRAIN_CLEARANCE_MARGIN, bounds.maxX + TERRAIN_CLEARANCE_MARGIN);
       const groundPenetration = bounds.maxY + ELEPHANT_CLEARANCE - groundY;
       if (groundPenetration > 0) {
         const newY = Phaser.Math.Clamp(cy - groundPenetration, PLATFORM_MIN_Y, effectiveMaxY);
@@ -375,8 +385,9 @@ export default class PlatformSpawner {
     let overlap = 0;
 
     // Platform's bottom edge must be at least ELEPHANT_CLEARANCE above ground.
-    // Sample the terrain densely across the full platform width to catch peaks.
-    const groundY = this.terrain.minTerrainYInRange(bounds.minX, bounds.maxX);
+    // Sample terrain beyond the platform edges so that adjacent higher terrain
+    // (e.g. at chunk boundaries where elevation drops) is accounted for.
+    const groundY = this.terrain.minTerrainYInRange(bounds.minX - TERRAIN_CLEARANCE_MARGIN, bounds.maxX + TERRAIN_CLEARANCE_MARGIN);
     const groundPenetration = bounds.maxY + ELEPHANT_CLEARANCE - groundY;
     if (groundPenetration > 0) overlap += groundPenetration;
 

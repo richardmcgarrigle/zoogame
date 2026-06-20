@@ -93,6 +93,10 @@ export default class TouchControls {
     return v;
   }
 
+  resetJumpZone() {
+    this._inJumpZone = false;
+  }
+
   /** @deprecated Use consumeJump() instead. */
   postUpdate() {
     this.jumpJustPressed = false;

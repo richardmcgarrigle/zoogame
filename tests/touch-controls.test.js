@@ -230,6 +230,22 @@ describe('Feature: Touch Controls', () => {
       expect(ctx.left).toBe(false);
       expect(ctx.right).toBe(false);
     });
+
+    it('re-triggers after resetJumpZone while stick stays in the zone', () => {
+      const ctx = makeStickContext();
+      // Enter jump zone
+      TouchControls.prototype._updateStick.call(ctx, 100, 100 - 30);
+      expect(ctx.jumpJustPressed).toBe(true);
+      ctx.jumpJustPressed = false;
+      // Still in zone — no re-trigger
+      TouchControls.prototype._updateStick.call(ctx, 100, 100 - 28);
+      expect(ctx.jumpJustPressed).toBe(false);
+      // Simulate landing: resetJumpZone clears _inJumpZone
+      TouchControls.prototype.resetJumpZone.call(ctx);
+      // Next update while still in zone → re-triggers
+      TouchControls.prototype._updateStick.call(ctx, 100, 100 - 30);
+      expect(ctx.jumpJustPressed).toBe(true);
+    });
   });
 
   describe('Scenario: Stick appears at touch origin', () => {

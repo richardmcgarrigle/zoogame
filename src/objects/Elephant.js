@@ -193,12 +193,13 @@ export default class Elephant {
       const right = this.cursors.right.isDown || this.keys.D.isDown ||
         pads.some(p => padPressed(p, PAD_BTN_D_RIGHT) || stickX(p) > GAMEPAD_STICK_DEAD) ||
         (touch?.right ?? false);
+      const touchJump = touch?.consumeJump() ?? false;
       const jumpPressed =
         Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
         Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
         Phaser.Input.Keyboard.JustDown(this.keys.W) ||
         pads.some(p => padJustDown(p, PAD_BTN_CROSS) || padJustDown(p, PAD_BTN_D_UP)) ||
-        (touch?.consumeJump() ?? false);
+        touchJump;
       const dashHeld =
         this.cursors.shift?.isDown ||
         pads.some(p => padPressed(p, PAD_BTN_SQUARE)) ||
@@ -228,6 +229,7 @@ export default class Elephant {
       // --- Jump ---
       if (isGrounded) {
         this.airJumpsUsed = 0;
+        if (!this.wasGrounded) touch?.resetJumpZone();
       }
       if (jumpPressed) {
         if (isGrounded) {

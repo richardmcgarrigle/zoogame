@@ -271,7 +271,7 @@
 
 **Scenario: Platforms clear the ground**
 - Given a platform is placed
-- Then it is positioned at least 110px above the terrain surface at that X so the elephant can walk underneath
+- Then it is positioned at least 110px above the terrain surface across its width plus an 80px margin on each side so the elephant can walk underneath even when approaching from adjacent higher terrain (e.g. at chunk boundaries where elevation drops)
 
 **Scenario: Platforms do not overlap**
 - Given two platforms are placed near each other
@@ -389,7 +389,12 @@
 **Scenario: Radial jump zone does not re-trigger while held**
 - Given the stick is already in the jump zone
 - When the player continues to hold the stick within the zone
-- Then no additional jump is triggered until the stick leaves and re-enters the zone
+- Then no additional jump is triggered until the stick leaves and re-enters the zone, or the elephant lands
+
+**Scenario: Radial jump zone re-triggers on landing**
+- Given the stick is held in the jump zone while the elephant is airborne
+- When the elephant lands
+- Then the jump zone state resets and the next frame triggers a new jump (allowing bunny-hop style repeated jumps while holding the stick up)
 
 **Scenario: Jump button triggers jump**
 - Given the player taps the green jump button on the right side

@@ -125,6 +125,32 @@ describe('Feature: Jumping', () => {
     });
   });
 
+  describe('Scenario: Landing resets radial jump zone', () => {
+    it('calls resetJumpZone on touch controls when elephant lands', () => {
+      const { scene, sprite, elephant } = makeGroundedElephant();
+      const resetJumpZone = vi.fn();
+      scene.touchControls = { consumeJump: () => false, dashHeld: false, left: false, right: false, resetJumpZone };
+      elephant.wasGrounded = false;
+      elephant.groundContacts = 1;
+
+      elephant.update(0, 16, []);
+
+      expect(resetJumpZone).toHaveBeenCalled();
+    });
+
+    it('does not call resetJumpZone when already grounded', () => {
+      const { scene, sprite, elephant } = makeGroundedElephant();
+      const resetJumpZone = vi.fn();
+      scene.touchControls = { consumeJump: () => false, dashHeld: false, left: false, right: false, resetJumpZone };
+      elephant.wasGrounded = true;
+      elephant.groundContacts = 1;
+
+      elephant.update(0, 16, []);
+
+      expect(resetJumpZone).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Scenario: Hard landing stomp', () => {
     it('shakes camera for 140ms when landing after falling faster than 7 px/frame', () => {
       const { scene, sprite, elephant } = makeGroundedElephant();
