@@ -381,6 +381,11 @@
 - Then the elephant jumps (jumpJustPressed is true for exactly 1 frame)
 - And the stick thumb turns green to indicate the jump zone is active
 
+**Scenario: Radial jump zone coexists with horizontal movement**
+- Given the player pushes the analog stick into the jump zone at a diagonal (up-left or up-right)
+- And the horizontal displacement exceeds the 12px dead zone
+- Then the elephant jumps AND moves in the horizontal direction simultaneously
+
 **Scenario: Radial jump zone does not re-trigger while held**
 - Given the stick is already in the jump zone
 - When the player continues to hold the stick within the zone

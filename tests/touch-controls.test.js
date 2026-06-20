@@ -196,6 +196,40 @@ describe('Feature: Touch Controls', () => {
         ctx, 100 + Math.cos(angleRad) * r, 100 + Math.sin(angleRad) * r);
       expect(ctx.jumpJustPressed).toBe(true);
     });
+
+    it('sets left AND jumpJustPressed when pushing up-left at the zone boundary', () => {
+      const ctx = makeStickContext();
+      // −30° from vertical = −120° in atan2; cos(−120°) = −0.5, at r=30 → hx = −15
+      const angleDeg = -120;
+      const angleRad = angleDeg * Math.PI / 180;
+      const r = 30;
+      TouchControls.prototype._updateStick.call(
+        ctx, 100 + Math.cos(angleRad) * r, 100 + Math.sin(angleRad) * r);
+      expect(ctx.jumpJustPressed).toBe(true);
+      expect(ctx.left).toBe(true);
+      expect(ctx.right).toBe(false);
+    });
+
+    it('sets right AND jumpJustPressed when pushing up-right at the zone boundary', () => {
+      const ctx = makeStickContext();
+      // +30° from vertical = −60° in atan2; cos(−60°) = 0.5, at r=30 → hx = 15
+      const angleDeg = -60;
+      const angleRad = angleDeg * Math.PI / 180;
+      const r = 30;
+      TouchControls.prototype._updateStick.call(
+        ctx, 100 + Math.cos(angleRad) * r, 100 + Math.sin(angleRad) * r);
+      expect(ctx.jumpJustPressed).toBe(true);
+      expect(ctx.right).toBe(true);
+      expect(ctx.left).toBe(false);
+    });
+
+    it('sets jumpJustPressed without left/right when pushing straight up', () => {
+      const ctx = makeStickContext();
+      TouchControls.prototype._updateStick.call(ctx, 100, 100 - 30);
+      expect(ctx.jumpJustPressed).toBe(true);
+      expect(ctx.left).toBe(false);
+      expect(ctx.right).toBe(false);
+    });
   });
 
   describe('Scenario: Stick appears at touch origin', () => {
