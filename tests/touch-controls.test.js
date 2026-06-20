@@ -272,4 +272,103 @@ describe('Feature: Touch Controls', () => {
       expect(ctx.right).toBe(false);
     });
   });
+
+  describe('Scenario: Jump button press via pointer event', () => {
+    function createTouchControls() {
+      const gfxMock = () => ({
+        clear: vi.fn().mockReturnThis(),
+        lineStyle: vi.fn().mockReturnThis(),
+        strokeCircle: vi.fn().mockReturnThis(),
+        fillStyle: vi.fn().mockReturnThis(),
+        fillCircle: vi.fn().mockReturnThis(),
+        fillRoundedRect: vi.fn().mockReturnThis(),
+        strokeRoundedRect: vi.fn().mockReturnThis(),
+        setPosition: vi.fn().mockReturnThis(),
+        setDepth: vi.fn().mockReturnThis(),
+        beginPath: vi.fn().mockReturnThis(),
+        strokePath: vi.fn().mockReturnThis(),
+        arc: vi.fn().mockReturnThis(),
+      });
+      const txtMock = () => ({
+        setOrigin: vi.fn().mockReturnThis(),
+        setPosition: vi.fn().mockReturnThis(),
+      });
+      const containerMock = () => ({
+        setDepth: vi.fn().mockReturnThis(),
+        setScrollFactor: vi.fn().mockReturnThis(),
+        setVisible: vi.fn().mockReturnThis(),
+        add: vi.fn(),
+      });
+      const mockScene = {
+        add: {
+          graphics: vi.fn(gfxMock),
+          text: vi.fn(txtMock),
+          container: vi.fn(containerMock),
+        },
+        input: { on: vi.fn() },
+        scale: { width: 800, height: 600, on: vi.fn() },
+      };
+      return new TouchControls(mockScene);
+    }
+
+    it('sets jumpJustPressed when pointer lands on the jump button', () => {
+      const tc = createTouchControls();
+      // Jump button center: W - 20 - 35 - 70 - 12 = 663, H - 20 - 35 = 545
+      tc._onDown({ id: 1, x: 663, y: 545 });
+
+      expect(tc.jumpJustPressed).toBe(true);
+    });
+
+    it('consumeJump returns true after jump button press', () => {
+      const tc = createTouchControls();
+      tc._onDown({ id: 1, x: 663, y: 545 });
+
+      expect(tc.consumeJump()).toBe(true);
+      expect(tc.consumeJump()).toBe(false);
+    });
+
+    it('sets dashHeld when pointer lands on the dash button', () => {
+      const tc = createTouchControls();
+      // Dash button center: W - 20 - 35 = 745, H - 20 - 35 = 545
+      tc._onDown({ id: 1, x: 745, y: 545 });
+
+      expect(tc.dashHeld).toBe(true);
+    });
+
+    it('jump button works while analog stick is active', () => {
+      const tc = createTouchControls();
+      // Start stick with pointer 0 on left side
+      tc._onDown({ id: 0, x: 100, y: 400 });
+      expect(tc._stickPointerId).toBe(0);
+
+      // Tap jump button with pointer 1
+      tc._onDown({ id: 1, x: 663, y: 545 });
+
+      expect(tc.jumpJustPressed).toBe(true);
+    });
+
+    it('releases jump button on pointer up', () => {
+      const tc = createTouchControls();
+      tc._onDown({ id: 1, x: 663, y: 545 });
+      expect(tc.jumpJustPressed).toBe(true);
+
+      tc._onUp({ id: 1 });
+      // jumpJustPressed is still true (cleared by consumeJump, not release)
+      // but _jumpWasDown should be false, allowing next press
+      tc.jumpJustPressed = false; // simulate consumeJump clearing it
+
+      // Press again
+      tc._onDown({ id: 1, x: 663, y: 545 });
+      expect(tc.jumpJustPressed).toBe(true);
+    });
+
+    it('jump button does NOT fire if pointer misses both buttons', () => {
+      const tc = createTouchControls();
+      // Touch in the middle of screen — no button
+      tc._onDown({ id: 1, x: 400, y: 300 });
+
+      expect(tc.jumpJustPressed).toBe(false);
+      expect(tc.dashHeld).toBe(false);
+    });
+  });
 });
